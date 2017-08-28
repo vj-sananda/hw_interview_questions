@@ -135,10 +135,18 @@ struct SIMDTb : TopLevel
   DataT compute_expected(const OpT op, const DataT A, const DataT B) {
     DataT r{};
     switch (op) {
-    case OpT::OP_SEL0: { r = A; } break;
-    case OpT::OP_SEL1: { r = B; } break;
-    case OpT::OP_ADD32: { r = (A + B); } break;
-    case OpT::OP_SUB32: { r = (A - B); } break;
+    case OpT::OP_SEL0: {
+      r = A;
+    } break;
+    case OpT::OP_SEL1: {
+      r = B;
+    } break;
+    case OpT::OP_ADD32: {
+      r = (A + B);
+    } break;
+    case OpT::OP_SUB32: {
+      r = (A - B);
+    } break;
     case OpT::OP_ADD16: {
       for (int i = 0; i < 2; i++)
         set16(r, get16(A, i) + get16(B, i), i);
