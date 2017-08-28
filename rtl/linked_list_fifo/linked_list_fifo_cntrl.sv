@@ -53,6 +53,8 @@ module linked_list_fifo_cntrl
    , output  llfifo_pkg::ptr_t               cmd_push_ptr_r
    , output  llfifo_pkg::ptr_t               cmd_pop_ptr_w
    //
+   , input                                   clear
+   //
    , output  logic                           full_r
    , output  logic                           empty_r
    , output  llfifo_pkg::empty_t             nempty_r
@@ -109,10 +111,13 @@ module linked_list_fifo_cntrl
       cmd_w.q         = q;
 
       //
-      ptr_valid_en    = cmd_w.valid;
+      ptr_valid_en    = (cmd_w.valid | clear);
       ptr_valid_w     = ptr_valid_r;
-      case (cmd_w.push)
-        1'b1: begin
+      casez ({clear, cmd_w.push})
+        2'b1?: begin
+          ptr_valid_w  = '0;
+        end
+        2'b01: begin
           ptr_valid_w [cmd_w.ptr]= '1;
         end
         default: begin
@@ -217,8 +222,8 @@ module linked_list_fifo_cntrl
       queue_table_r <= '0;
     end else begin
       for (int i = 0; i < ID_N; i++)
-        if (queue_table_en [i])
-          queue_table_r.q [i] <= queue_table_w;
+        if (queue_table_en [i] || clear)
+          queue_table_r.q [i] <= clear ? '0 : queue_table_w;
     end
   end // block: queue_table_reg_PROC
 

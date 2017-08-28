@@ -34,12 +34,81 @@
     __func(cmd_id, uint32_t)                    \
     __func(cmd_push_data, uint32_t)             \
     __func(cmd_pop_data, uint32_t)              \
+    __func(clear, bool)                         \
     __func(full_r, bool)                        \
     __func(empty_r, bool)                       \
     __func(nempty_r, uint32_t)                  \
     __func(busy_r, bool)
 
+struct LinkedListFifoTb : libtb::TopLevel
+{
+    using UUT = Vlinked_list_fifo;
+    using IdT = uint32_t;
+    using DataT = uint32_t;
+    SC_HAS_PROCESS(LinkedListFifoTb);
+    LinkedListFifoTb(sc_core::sc_module_name mn = "t")
+        : uut_("uut") {
+        SC_METHOD(m_checker);
+        dont_initialize();
+        sensitive << e_tb_sample();
+        uut_.clk(clk());
+        uut_.rst(rst());
+#define __bind_signal(__name, __type)           \
+        uut_.__name(__name##_);
+        PORTS(__bind_signal)
+#undef __bind_signals
+    }
+    bool run_test() {
+        cmd_idle();
+        cmd_push(0, 0);
+        cmd_push(0, 1);
+        cmd_push(0, 2);
+        (void)cmd_pop(0);
+        (void)cmd_pop(0);
+        (void)cmd_pop(0);
+        return false;
+    }
+    void cmd_push(IdT id, DataT data) {
+        cmd_pass_ = true;
+        cmd_push_ = true;
+        cmd_id_ = id;
+        cmd_push_data_ = data;
+        t_wait_posedge_clk();
+        cmd_idle();
+        t_wait_posedge_clk();
+    }
+    DataT cmd_pop(IdT id) {
+        DataT ret{};
+        cmd_pass_ = true;
+        cmd_push_ = true;
+        cmd_id_ = id;
+        t_wait_posedge_clk();
+        ret = cmd_pop_data_;
+        cmd_idle();
+        t_wait_posedge_clk();
+        return ret;
+    }
+    void cmd_idle() {
+        cmd_pass_ = false;
+        cmd_push_ = false;
+        cmd_id_ = 0;
+        cmd_push_data_ = 0;
+    }
+    void clear() {
+        clear_ = true;
+        t_wait_posedge_clk();
+        clear_ = false;
+    }
+    void m_checker() {
+    }
+#define __declare_signal(__name, __type)        \
+    sc_core::sc_signal<__type> __name##_;
+    PORTS(__declare_signal)
+#undef __declare_signal
+    UUT uut_;
+};
+
 int sc_main(int argc, char **argv)
 {
-    return 0;
+    return libtb::LibTbSim<LinkedListFifoTb>(argc, argv).start();
 }

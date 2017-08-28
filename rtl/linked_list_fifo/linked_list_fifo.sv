@@ -53,6 +53,8 @@ module linked_list_fifo
    //
    , output  llfifo_pkg::word_t              cmd_pop_data
    //
+   , input                                   clear
+   //
    , output  logic                           full_r
    , output  logic                           empty_r
    , output  llfifo_pkg::empty_t             nempty_r
@@ -104,6 +106,8 @@ module linked_list_fifo
     //
     , .cmd_push_ptr_r         (cmd_push_ptr_r     )
     , .cmd_pop_ptr_w          (cmd_pop_ptr_w      )
+    //
+    , .clear                  (clear              )
     //
     , .full_r                 (full_r             )
     , .empty_r                (empty_r            )
