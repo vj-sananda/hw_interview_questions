@@ -26,89 +26,134 @@
 //========================================================================== //
 
 #include <libtb.h>
+#include <vector>
+#include <deque>
+#include <sstream>
 #include "Vlinked_list_fifo.h"
 
 #define PORTS(__func)                           \
-    __func(cmd_pass, bool)                      \
-    __func(cmd_push, bool)                      \
-    __func(cmd_id, uint32_t)                    \
-    __func(cmd_push_data, uint32_t)             \
-    __func(cmd_pop_data, uint32_t)              \
-    __func(clear, bool)                         \
-    __func(full_r, bool)                        \
-    __func(empty_r, bool)                       \
-    __func(nempty_r, uint32_t)                  \
-    __func(busy_r, bool)
+  __func(cmd_pass, bool)                        \
+  __func(cmd_push, bool)                        \
+  __func(cmd_id, uint32_t)                      \
+  __func(cmd_push_data, uint32_t)               \
+  __func(cmd_pop_data, uint32_t)                \
+  __func(clear, bool)                           \
+  __func(full_r, bool)                          \
+  __func(empty_r, bool)                         \
+  __func(nempty_r, uint32_t)                    \
+  __func(busy_r, bool)
 
+static constexpr int ID_N = 4;
+static constexpr int PTR_N = 255;
+
+using namespace libtb;
 struct LinkedListFifoTb : libtb::TopLevel
 {
-    using UUT = Vlinked_list_fifo;
-    using IdT = uint32_t;
-    using DataT = uint32_t;
-    SC_HAS_PROCESS(LinkedListFifoTb);
-    LinkedListFifoTb(sc_core::sc_module_name mn = "t")
-        : uut_("uut") {
-        SC_METHOD(m_checker);
-        dont_initialize();
-        sensitive << e_tb_sample();
-        uut_.clk(clk());
-        uut_.rst(rst());
+  using UUT = Vlinked_list_fifo;
+  using IdT = uint32_t;
+  using DataT = uint32_t;
+  enum class OpT { PUSH, POP };
+  SC_HAS_PROCESS(LinkedListFifoTb);
+  LinkedListFifoTb(sc_core::sc_module_name mn = "t")
+    : uut_("uut") {
+    expected_.resize(4);
+    cnt_ = 0;
+    uut_.clk(clk());
+    uut_.rst(rst());
 #define __bind_signal(__name, __type)           \
-        uut_.__name(__name##_);
-        PORTS(__bind_signal)
+    uut_.__name(__name##_);
+    PORTS(__bind_signal)
 #undef __bind_signals
+  }
+  bool run_test() {
+    cmd_idle();
+    int ops = 10000;
+    std::vector<OpT> op(2);
+    while (ops > 0) {
+      t_wait_sync();
+      if (cnt_ == 0 && !empty_r_)
+        LIBTB_REPORT_ERROR("device should report empty.");
+      if (cnt_ != 0 && empty_r_)
+        LIBTB_REPORT_ERROR("device not should report empty.");
+      if (cnt_ == PTR_N && !full_r_)
+        LIBTB_REPORT_ERROR("device should report full.");
+      if (cnt_ != PTR_N && full_r_)
+        LIBTB_REPORT_ERROR("device should not report full.");
+      
+      op.clear();
+      const IdT id = random_integer_in_range(ID_N - 1);
+      if (cnt_ < PTR_N)
+        op.push_back(OpT::PUSH);
+      if (expected_[id].size())
+        op.push_back(OpT::POP);
+
+      if (op.size()) {
+        if (*choose_random(op.begin(), op.end()) == OpT::PUSH) {
+          ++cnt_;
+          cmd_push(id, random<DataT>());
+        } else {
+          --cnt_;
+          cmd_pop(id);
+        }
+        --ops;
+      }
     }
-    bool run_test() {
-        cmd_idle();
-        cmd_push(0, 0);
-        cmd_push(0, 1);
-        cmd_push(0, 2);
-        (void)cmd_pop(0);
-        (void)cmd_pop(0);
-        (void)cmd_pop(0);
-        return false;
+    return false;
+  }
+  void cmd_push(IdT id, DataT data) {
+    cmd_pass_ = true;
+    cmd_push_ = true;
+    cmd_id_ = id;
+    cmd_push_data_ = data;
+    expected_[id].push_back(data);
+    t_wait_posedge_clk();
+    cmd_idle();
+    t_wait_posedge_clk();
+  }
+  void cmd_pop(IdT id) {
+    DataT actual{};
+    cmd_pass_ = true;
+    cmd_push_ = false;
+    cmd_id_ = id;
+    t_wait_posedge_clk();
+    t_wait_sync();
+    actual = cmd_pop_data_;
+    if (expected_[id].size() == 0) {
+      LIBTB_REPORT_ERROR("Pop from empty queue!");
     }
-    void cmd_push(IdT id, DataT data) {
-        cmd_pass_ = true;
-        cmd_push_ = true;
-        cmd_id_ = id;
-        cmd_push_data_ = data;
-        t_wait_posedge_clk();
-        cmd_idle();
-        t_wait_posedge_clk();
+    const DataT expected = expected_[id].front();
+    if (actual != expected) {
+      std::stringstream ss;
+      ss << "Mismatch:" << std::hex
+         << "expected " << expected << " actual " << actual;
+      LIBTB_REPORT_INFO(ss.str());
     }
-    DataT cmd_pop(IdT id) {
-        DataT ret{};
-        cmd_pass_ = true;
-        cmd_push_ = true;
-        cmd_id_ = id;
-        t_wait_posedge_clk();
-        ret = cmd_pop_data_;
-        cmd_idle();
-        t_wait_posedge_clk();
-        return ret;
-    }
-    void cmd_idle() {
-        cmd_pass_ = false;
-        cmd_push_ = false;
-        cmd_id_ = 0;
-        cmd_push_data_ = 0;
-    }
-    void clear() {
-        clear_ = true;
-        t_wait_posedge_clk();
-        clear_ = false;
-    }
-    void m_checker() {
-    }
+    expected_[id].pop_front();
+    cmd_idle();
+    t_wait_posedge_clk();
+
+  }
+  void cmd_idle() {
+    cmd_pass_ = false;
+    cmd_push_ = false;
+    cmd_id_ = 0;
+    cmd_push_data_ = 0;
+  }
+  void clear() {
+    clear_ = true;
+    t_wait_posedge_clk();
+    clear_ = false;
+  }
+  std::vector<std::deque<DataT>> expected_;
+  std::size_t cnt_;
 #define __declare_signal(__name, __type)        \
-    sc_core::sc_signal<__type> __name##_;
-    PORTS(__declare_signal)
+  sc_core::sc_signal<__type> __name##_;
+  PORTS(__declare_signal)
 #undef __declare_signal
-    UUT uut_;
+  UUT uut_;
 };
 
 int sc_main(int argc, char **argv)
 {
-    return libtb::LibTbSim<LinkedListFifoTb>(argc, argv).start();
+  return libtb::LibTbSim<LinkedListFifoTb>(argc, argv).start();
 }

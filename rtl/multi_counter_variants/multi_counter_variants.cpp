@@ -201,6 +201,6 @@ public:
 
 int sc_main(int argc, char **argv)
 {
-    using namespace libtb;
-    return LibTbSim<MultiCounterVariantsTb>(argc, argv).start();
+  using namespace libtb;
+  return LibTbSim<MultiCounterVariantsTb>(argc, argv).start();
 }

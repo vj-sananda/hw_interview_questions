@@ -26,4 +26,3 @@
 ##========================================================================== //
 
 EMIT_ANSWER(linked_list_fifo)
-#LIBPD_VIVADO(linked_list_fifo)

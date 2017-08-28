@@ -103,6 +103,9 @@ module linked_list_fifo_cntrl
       ptr_table_din   = cmd_push_ptr_r;
 
       //
+      cmd_en          = (cmd_pass | cmd_r.valid);
+
+      //
       cmd_w           = '0;
       cmd_w.valid     = cmd_pass;
       cmd_w.push      = cmd_push;
@@ -121,7 +124,7 @@ module linked_list_fifo_cntrl
           ptr_valid_w [cmd_w.ptr]= '1;
         end
         default: begin
-          ptr_valid_w [cmd_w.q.tail]= '1;
+          ptr_valid_w [cmd_w.q.tail]= '0;
         end
       endcase
 
@@ -132,7 +135,7 @@ module linked_list_fifo_cntrl
   function ptr_t ffs(ptr_d_t d);
     begin
       ptr_t r;
-      for (int i = $bits(ptr_d_t); i >= 0; i--)
+      for (int i = $bits(ptr_d_t); i > 0; i--)
         if (d[i])
           r = ptr_t'(i);
       return r;
@@ -145,7 +148,7 @@ module linked_list_fifo_cntrl
 
     //
     cmd_push_ptr_w   = ffs(~ptr_valid_w);
-    cmd_push_ptr_en  = '0;
+    cmd_push_ptr_en  = cmd_pass;
 
     //
     busy_r           = cmd_r.valid;
@@ -176,13 +179,13 @@ module linked_list_fifo_cntrl
           upt.cnt    = cmd_r.q.cnt + 'b1;
           upt.valid  = 1'b1;
           upt.head   = cmd_r.ptr;
-          upt.tail   = cmd_r.q.tail;
+          upt.tail   = cmd_r.q.valid ? cmd_r.q.tail : cmd_r.ptr;
         end
         default: begin
           upt.cnt    = cmd_r.q.cnt - 'b1;
           upt.valid  = (upt.cnt != '0);
-          upt.head   = cmd_r.q.head;
-          upt.tail   = ptr_table_dout;
+          upt.head   = upt.valid ? cmd_r.q.head : '0;
+          upt.tail   = upt.valid ? ptr_table_dout : '0;
         end
       endcase
       queue_table_w  = upt;
@@ -192,7 +195,9 @@ module linked_list_fifo_cntrl
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
-    if (cmd_push_ptr_en)
+    if (rst)
+      cmd_push_ptr_r <= 'b1;
+    else if (cmd_push_ptr_en)
       cmd_push_ptr_r <= cmd_push_ptr_w;
 
   // ------------------------------------------------------------------------ //

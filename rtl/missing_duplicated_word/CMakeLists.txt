@@ -26,3 +26,4 @@
 ##========================================================================== //
 
 EMIT_ANSWER(missing_duplicated_word)
+LIBPD_VIVADO(missing_duplicated_word)
