@@ -1,8 +1,5 @@
-`ifndef SIMD_PKG_VH
-`define SIMD_PKG_VH
-
 //========================================================================== //
-// Copyright (c) 2017, Stephen Henry
+// Copyright (c) 2016, Stephen Henry
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -28,37 +25,21 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-package simd_pkg;
+#include <libtb.h>
+#include "Vlinked_list_fifo.h"
 
-  // Enumeration of permissible SIMD ALU opcodes.
-  //
-  typedef enum logic [3:0] { OP_SEL0      = 4'b0000,
-                             OP_SEL1      = 4'b0001,
-                             OP_ADD32     = 4'b0010,
-                             OP_SUB32     = 4'b0011,
-                             OP_ADD16     = 4'b0100,
-                             OP_SUB16     = 4'b0101,
-                             OP_ADD8      = 4'b0110,
-                             OP_SUB8      = 4'b0111,
-                             OP_ADDSUB16  = 4'b1000,
-                             OP_SUBADD16  = 4'b1001,
-                             OP_ADDSUB8   = 4'b1010,
-                             OP_SUBADD8   = 4'b1011
-                           } op_t;
+#define PORTS(__func)                           \
+    __func(cmd_pass, bool)                      \
+    __func(cmd_push, bool)                      \
+    __func(cmd_id, uint32_t)                    \
+    __func(cmd_push_data, uint32_t)             \
+    __func(cmd_pop_data, uint32_t)              \
+    __func(full_r, bool)                        \
+    __func(empty_r, bool)                       \
+    __func(nempty_r, uint32_t)                  \
+    __func(busy_r, bool)
 
-  //
-  typedef logic [7:0]  byte_t;
-  typedef byte_t [1:0]  word_t;
-  typedef logic [3:0]  cntrl_t;
-
-  typedef struct packed {
-    byte_t       b;
-    logic        c;
-  } simd_byte_t;
-
-  typedef struct packed {
-    simd_byte_t  [1:0] b;
-  } simd_word_t;
-
-endpackage // simd_pkg
-`endif
+int sc_main(int argc, char **argv)
+{
+    return 0;
+}

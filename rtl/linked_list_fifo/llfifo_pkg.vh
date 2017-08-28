@@ -1,5 +1,5 @@
-`ifndef SIMD_PKG_VH
-`define SIMD_PKG_VH
+`ifndef LLFIFO_PKG_VH
+`define LLFIFO_PKG_VH
 
 //========================================================================== //
 // Copyright (c) 2017, Stephen Henry
@@ -28,37 +28,43 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-package simd_pkg;
+package llfifo_pkg;
 
-  // Enumeration of permissible SIMD ALU opcodes.
-  //
-  typedef enum logic [3:0] { OP_SEL0      = 4'b0000,
-                             OP_SEL1      = 4'b0001,
-                             OP_ADD32     = 4'b0010,
-                             OP_SUB32     = 4'b0011,
-                             OP_ADD16     = 4'b0100,
-                             OP_SUB16     = 4'b0101,
-                             OP_ADD8      = 4'b0110,
-                             OP_SUB8      = 4'b0111,
-                             OP_ADDSUB16  = 4'b1000,
-                             OP_SUBADD16  = 4'b1001,
-                             OP_ADDSUB8   = 4'b1010,
-                             OP_SUBADD8   = 4'b1011
-                           } op_t;
+  localparam int ID_N  = 4;
+  localparam int PTR_N = 255;
+  localparam int PTR_W  = $clog2(PTR_N);
 
-  //
-  typedef logic [7:0]  byte_t;
-  typedef byte_t [1:0]  word_t;
-  typedef logic [3:0]  cntrl_t;
+  typedef logic [$clog2(ID_N)-1:0] id_t;
+  typedef logic [ID_N-1:0] id_d_t;
+  typedef logic [PTR_W-1:0] ptr_t;
+  typedef logic [PTR_N-1:1] ptr_d_t;
+  typedef logic [ID_N-1:0] empty_t;
+  typedef logic [31:0]     word_t;
+  typedef logic [$clog2(PTR_N)-1:0] cnt_t;
 
   typedef struct packed {
-    byte_t       b;
-    logic        c;
-  } simd_byte_t;
+    ptr_t [PTR_W-1:1] p;
+  } ptr_table_t;
 
   typedef struct packed {
-    simd_byte_t  [1:0] b;
-  } simd_word_t;
+    logic        valid;
+    ptr_t        head;
+    ptr_t        tail;
+    cnt_t        cnt;
+  } queue_t;
 
-endpackage // simd_pkg
+  typedef struct packed {
+    queue_t [PTR_N-1:0] q;
+  } queue_table_t;
+
+  typedef struct packed {
+    logic        valid;
+    logic        push;
+    id_t         id;
+    ptr_t        ptr;
+    queue_t      q;
+  } cmd_t;
+
+endpackage // llfifo_pkg
+
 `endif

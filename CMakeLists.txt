@@ -44,6 +44,5 @@ SET(CMAKE_MODULE_PATH
   )
 
 INCLUDE(cmake/Macros.cmake)
-
 ADD_SUBDIRECTORY(contrib)
 ADD_SUBDIRECTORY(rtl)
