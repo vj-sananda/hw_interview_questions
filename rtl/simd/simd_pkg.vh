@@ -48,7 +48,7 @@ package simd_pkg;
 
   //
   typedef logic [7:0]  byte_t;
-  typedef byte_t [1:0]  word_t;
+  typedef byte_t [3:0]  word_t;
   typedef logic [3:0]  cntrl_t;
 
   typedef struct packed {
@@ -57,7 +57,7 @@ package simd_pkg;
   } simd_byte_t;
 
   typedef struct packed {
-    simd_byte_t  [1:0] b;
+    simd_byte_t  [3:0] b;
   } simd_word_t;
 
 endpackage // simd_pkg

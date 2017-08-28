@@ -130,8 +130,8 @@ module simd
       cntrl_t r;
       case (op)
         OP_ADD32:    r  = 4'b0000;
-        OP_SUB32:    r  = 4'b0000;
-        OP_ADD16:    r  = 4'b1010;
+        OP_SUB32:    r  = 4'b0001;
+        OP_ADD16:    r  = 4'b0000;
         OP_SUB16:    r  = 4'b0101;
         OP_ADD8:     r  = 4'b0000;
         OP_SUB8:     r  = 4'b1111;
