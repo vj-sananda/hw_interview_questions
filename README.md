@@ -59,7 +59,7 @@ invoking the generated executable in the RTL directory.
   concepts. Multiple counters are retained in a central state table. They are
   then randomly incremented or decremented on demand.
 * __multi_counter_variant__ Alternate solutions to multi_counter problem.
-* __one_or_two__ Answer to detect whether for an arbitrary input vector, 0-bits
+p* __one_or_two__ Answer to detect whether for an arbitrary input vector, 0-bits
   are set, 1-bit is set, or greater than 1 bit is set.
 * __mcp_formulation (Multi-Cycle Path Formulation)__ Answer to pass a vector
   between two clock domains using a multi-cycle path.
@@ -75,6 +75,8 @@ invoking the generated executable in the RTL directory.
   integer in a state table containing duplicated entries.
 * __multiply_by_21__ Answer to demonstrate how a constant value can be
   efficiently multiplied against a randomized vector.
+* __simd__ Answer to construct a 32b SIMD ALU
+* __linked_list_fifo__ Answer to construct a Linked List Queue with N-contexts
 
 ## Disclaimer
 Contributions are welcome however please consider that the current project
