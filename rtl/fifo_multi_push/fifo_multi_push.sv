@@ -424,9 +424,9 @@ module fifo_multi_push #(parameter int W = 32, parameter int N = 8) (
   //
   popcnt #(.W(FIFO_N)) u_popcnt (
     //
-      .x                 (push_vec           )
+      .x                 (push_vec                     )
     //
-    , .y                 (push_vec_cnt       )
+    , .y                 (fifo_n_dec_t'(push_vec_cnt)  )
   );
 
   // ------------------------------------------------------------------------ //
