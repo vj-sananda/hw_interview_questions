@@ -4,12 +4,12 @@ Fungible/Google
 
 # Problem
 
-Design and implement a unit can maintains N-ordered queues as a singley
+Design and implement a unit can maintains N-ordered queues as a singly
 linked list.
 
 # Commentary
 
-Singaley linked lists are commonly used in networking applications
+Singly linked lists are commonly used in networking applications
 where multiple queues must be maintained for differing and independent
 contexts and the load across individual queues is not balanced for all
 traffic flows. In this case, it would otherwise be necessary to size
@@ -26,4 +26,3 @@ The performance degredation associated with such queues is mitigated
 by allocating buffer space at the Flit-level opposed to the
 Phit-level. This corresponds well with flow control elsewhere and is a
 common technique used with this approach.
-
