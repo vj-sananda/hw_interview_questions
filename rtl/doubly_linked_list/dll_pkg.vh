@@ -34,11 +34,14 @@ package dll_pkg;
   localparam int PTR_N = 256;
   localparam int PTR_DIV2_N = PTR_N / 2;
   localparam int PTR_W  = $clog2(PTR_N);
+  localparam int PTR_DIV2_W = $clog2(PTR_DIV2_N);
 
   typedef logic [$clog2(ID_N)-1:0] id_t;
   typedef logic [ID_N-1:0] id_d_t;
   typedef logic [PTR_W-1:0] ptr_t;
-  typedef logic [PTR_N-1:1] ptr_d_t;
+  typedef logic [PTR_N-1:0] ptr_d_t;
+  typedef logic [PTR_DIV2_W-1:0] ptr_div2_t;
+  typedef logic [PTR_DIV2_N-1:0] ptr_div2_d_t;
   typedef logic [ID_N-1:0] empty_t;
   typedef logic [31:0]     word_t;
   typedef logic [$clog2(PTR_N)-1:0] cnt_t;
@@ -49,14 +52,7 @@ package dll_pkg;
                               OP_PUSH_BACK    = 2'b11
                             } op_t;
   localparam int OP_PUSH_B  = 1;
-
-  typedef struct packed {
-    ptr_t next, prev;
-  } ptr_pair_t;
-
-  typedef struct packed {
-    ptr_pair_t [PTR_W-1:1] p;
-  } ptr_table_t;
+  localparam int OP_BACK_B  = 0;
 
   typedef struct packed {
     logic        valid;
@@ -66,7 +62,7 @@ package dll_pkg;
   } queue_t;
 
   typedef struct packed {
-    queue_t [PTR_N-1:0] q;
+    queue_t [ID_N-1:0] q;
   } queue_table_t;
 
   typedef struct packed {

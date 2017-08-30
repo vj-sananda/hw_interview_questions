@@ -67,9 +67,9 @@ struct DoublyLinkedListTb : libtb::TopLevel
   }
   bool run_test() {
     cmd_idle();
-    int ops = 10000;
-    std::vector<OpT> op(2);
-    while (ops > 0) {
+    int n = 10000;
+    std::vector<OpT> ops(4);
+    while (n > 0) {
       t_wait_sync();
       if (cnt_ == 0 && !empty_r_)
         LIBTB_REPORT_ERROR("device should report empty.");
@@ -80,26 +80,27 @@ struct DoublyLinkedListTb : libtb::TopLevel
       if (cnt_ != PTR_N && full_r_)
         LIBTB_REPORT_ERROR("device should not report full.");
 
-      op.clear();
-      const IdT id = random_integer_in_range(ID_N - 1);
+      ops.clear();
+      //      const IdT id = random_integer_in_range(ID_N - 1);
+      const IdT id = 0;
       if (cnt_ < PTR_N) {
-        op.push_back(PUSH_BACK);
-//        op.push_back(PUSH_FRONT);
+        ops.push_back(PUSH_BACK);
+        ops.push_back(PUSH_FRONT);
       }
       if (expected_[id].size()) {
-//        op.push_back(POP_BACK);
-        op.push_back(POP_FRONT);
+        ops.push_back(POP_BACK);
+        ops.push_back(POP_FRONT);
       }
-
-      if (op.size()) {
-        if (*choose_random(op.begin(), op.end()) == PUSH_BACK) {
+      if (ops.size()) {
+        const OpT op = *choose_random(ops.begin(), ops.end());
+        if (op == PUSH_BACK || op == PUSH_FRONT) {
           ++cnt_;
-          cmd_push(id, random<DataT>());
+          cmd_push(id, random<DataT>(), op == PUSH_BACK);
         } else {
           --cnt_;
-          cmd_pop(id);
+          cmd_pop(id, op == POP_FRONT);
         }
-        --ops;
+        --n;
       }
     }
     return false;

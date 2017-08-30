@@ -82,9 +82,18 @@ module doubly_linked_list_cntrl
   cmd_t                                 cmd_r;
   cmd_t                                 cmd_w;
   logic                                 cmd_en;
-
-  `SPSRAM_SIGNALS(ptr_table0_, $bits(ptr_pair_t), $clog2(PTR_DIV2_N));
-  `SPSRAM_SIGNALS(ptr_table1_, $bits(ptr_pair_t), $clog2(PTR_DIV2_N));
+  //
+  logic                                 ptr_table_n_en;
+  logic                                 ptr_table_n_wen;
+  ptr_t                                 ptr_table_n_addr;
+  ptr_t                                 ptr_table_n_din;
+  ptr_t                                 ptr_table_n_dout;
+  //
+  logic                                 ptr_table_p_en;
+  logic                                 ptr_table_p_wen;
+  ptr_t                                 ptr_table_p_addr;
+  ptr_t                                 ptr_table_p_din;
+  ptr_t                                 ptr_table_p_dout;
 
   // ------------------------------------------------------------------------ //
   //
@@ -95,13 +104,39 @@ module doubly_linked_list_cntrl
       queue_t q       = queue_table_r.q [cmd_id];
 
       //
-      cmd_pop_ptr_w   = q.tail;
-
+      ptr_table_n_en   = cmd_pass;
+      ptr_table_n_wen  = cmd_op [OP_PUSH_B];
+      ptr_table_n_addr = '0;
+      ptr_table_n_din  = '0;
       //
-      ptr_table_en    = cmd_pass;
-      ptr_table_wen   = cmd_op [OP_PUSH_B];
-      ptr_table_addr  = cmd_op [OP_PUSH_B] ? q.head : q.tail;
-      ptr_table_din   = cmd_push_ptr_r;
+      ptr_table_p_en   = cmd_pass;
+      ptr_table_p_wen  = cmd_op [OP_PUSH_B];
+      ptr_table_p_addr = '0;
+      ptr_table_p_din  = '0;
+      case (cmd_op)
+        OP_POP_FRONT: begin
+          ptr_table_p_addr = q.head;
+          end
+        OP_POP_BACK: begin
+          ptr_table_n_addr = q.tail;
+        end
+        OP_PUSH_FRONT: begin
+          //
+          ptr_table_n_addr = q.head;
+          ptr_table_n_din  = cmd_push_ptr_r;
+          //
+          ptr_table_p_addr = cmd_push_ptr_r;
+          ptr_table_p_din  = q.head;
+        end
+        OP_PUSH_BACK: begin
+          //
+          ptr_table_n_addr = cmd_push_ptr_r;
+          ptr_table_n_din  = q.tail;
+          //
+          ptr_table_p_addr = q.tail;
+          ptr_table_p_din  = cmd_push_ptr_r;
+        end
+      endcase
 
       //
       cmd_en          = (cmd_pass | cmd_r.valid);
@@ -115,6 +150,9 @@ module doubly_linked_list_cntrl
       cmd_w.q         = q;
 
       //
+      cmd_pop_ptr_w   = cmd_op [OP_BACK_B] ? q.tail : q.head;
+
+      //
       ptr_valid_en    = (cmd_w.valid | clear);
       ptr_valid_w     = ptr_valid_r;
       casez ({clear, cmd_w.op})
@@ -125,7 +163,8 @@ module doubly_linked_list_cntrl
           ptr_valid_w [cmd_w.ptr]= '1;
         end
         default: begin
-          ptr_valid_w [cmd_w.q.tail]= '0;
+          ptr_t ptr = cmd_w.op [OP_BACK_B] ? cmd_w.q.tail : cmd_w.q.head;
+          ptr_valid_w [ptr] = '0;
         end
       endcase
 
@@ -136,7 +175,7 @@ module doubly_linked_list_cntrl
   function ptr_t ffs(ptr_d_t d);
     begin
       ptr_t r;
-      for (int i = $bits(ptr_d_t); i > 0; i--)
+      for (int i = PTR_N - 1; i >= 0; i--)
         if (d[i])
           r = ptr_t'(i);
       return r;
@@ -179,14 +218,24 @@ module doubly_linked_list_cntrl
         1'b1: begin
           upt.cnt    = cmd_r.q.cnt + 'b1;
           upt.valid  = 1'b1;
-          upt.head   = cmd_r.ptr;
-          upt.tail   = cmd_r.q.valid ? cmd_r.q.tail : cmd_r.ptr;
+          if (cmd_r.q.valid) begin
+            upt.head = cmd_r.op [OP_BACK_B] ? cmd_r.q.head : cmd_r.ptr;
+            upt.tail = cmd_r.op [OP_BACK_B] ? cmd_r.ptr : cmd_r.q.tail;
+          end else begin
+            upt.head = cmd_r.ptr;
+            upt.tail = cmd_r.ptr;
+          end
         end
         default: begin
           upt.cnt    = cmd_r.q.cnt - 'b1;
           upt.valid  = (upt.cnt != '0);
-          upt.head   = upt.valid ? cmd_r.q.head : '0;
-          upt.tail   = upt.valid ? ptr_table_dout : '0;
+          if (upt.valid) begin
+            upt.head = cmd_r.op [OP_BACK_B] ? cmd_r.q.head : ptr_table_p_dout;
+            upt.tail = cmd_r.op [OP_BACK_B] ? ptr_table_n_dout : cmd_r.q.tail;
+          end else begin
+            upt.head = '0;
+            upt.tail = '0;
+          end
         end
       endcase
       queue_table_w  = upt;
@@ -197,7 +246,7 @@ module doubly_linked_list_cntrl
   //
   always_ff @(posedge clk)
     if (rst)
-      cmd_push_ptr_r <= 'b1;
+      cmd_push_ptr_r <= '0;
     else if (cmd_push_ptr_en)
       cmd_push_ptr_r <= cmd_push_ptr_w;
 
@@ -243,29 +292,28 @@ module doubly_linked_list_cntrl
 
   // ------------------------------------------------------------------------ //
   //
-  spsram #(.W($bits(ptr_pair_t)), .N(PTR_DIV2_N)) u_ptr_table0 (
+  spsram #(.W($bits(ptr_t)), .N(PTR_N)) u_ptr_table_n (
     //
-      .clk                    (clk                )
+      .clk                    (clk                 )
     //
-    , .en                     (ptr_table0_en      )
-    , .wen                    (ptr_table0_wen     )
-    , .addr                   (ptr_table0_addr    )
-    , .din                    (ptr_table0_din     )
-    , .dout                   (ptr_table0_dout    )
+    , .en                     (ptr_table_n_en      )
+    , .wen                    (ptr_table_n_wen     )
+    , .addr                   (ptr_table_n_addr    )
+    , .din                    (ptr_table_n_din     )
+    , .dout                   (ptr_table_n_dout    )
   );
 
   // ------------------------------------------------------------------------ //
   //
-  spsram #(.W($bits(ptr_pair_t)), .N(PTR_DIV2_N)) u_ptr_table1 (
+  spsram #(.W($bits(ptr_t)), .N(PTR_N)) u_ptr_table_p (
     //
-      .clk                    (clk                )
+      .clk                    (clk                 )
     //
-    , .en                     (ptr_table1_en      )
-    , .wen                    (ptr_table1_wen     )
-    , .addr                   (ptr_table1_addr    )
-    , .din                    (ptr_table1_din     )
-    , .dout                   (ptr_table1_dout    )
+    , .en                     (ptr_table_p_en      )
+    , .wen                    (ptr_table_p_wen     )
+    , .addr                   (ptr_table_p_addr    )
+    , .din                    (ptr_table_p_din     )
+    , .dout                   (ptr_table_p_dout    )
   );
-
 
 endmodule // doubly_linked_list_cntrl
