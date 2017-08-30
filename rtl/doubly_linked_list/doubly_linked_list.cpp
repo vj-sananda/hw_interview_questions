@@ -67,7 +67,7 @@ struct DoublyLinkedListTb : libtb::TopLevel
   }
   bool run_test() {
     cmd_idle();
-    int n = 10000;
+    int n = 100000;
     std::vector<OpT> ops(4);
     while (n > 0) {
       t_wait_sync();

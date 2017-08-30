@@ -216,7 +216,6 @@ module doubly_linked_list_cntrl
       upt                        = cmd_r.q;
       case (cmd_r.op[OP_PUSH_B])
         1'b1: begin
-          upt.cnt    = cmd_r.q.cnt + 'b1;
           upt.valid  = 1'b1;
           if (cmd_r.q.valid) begin
             upt.head = cmd_r.op [OP_BACK_B] ? cmd_r.q.head : cmd_r.ptr;
@@ -227,8 +226,7 @@ module doubly_linked_list_cntrl
           end
         end
         default: begin
-          upt.cnt    = cmd_r.q.cnt - 'b1;
-          upt.valid  = (upt.cnt != '0);
+          upt.valid  = (cmd_r.q.head != cmd_r.q.tail);
           if (upt.valid) begin
             upt.head = cmd_r.op [OP_BACK_B] ? cmd_r.q.head : ptr_table_p_dout;
             upt.tail = cmd_r.op [OP_BACK_B] ? ptr_table_n_dout : cmd_r.q.tail;

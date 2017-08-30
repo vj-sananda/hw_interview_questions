@@ -44,7 +44,6 @@ package dll_pkg;
   typedef logic [PTR_DIV2_N-1:0] ptr_div2_d_t;
   typedef logic [ID_N-1:0] empty_t;
   typedef logic [31:0]     word_t;
-  typedef logic [$clog2(PTR_N)-1:0] cnt_t;
 
   typedef enum logic [1:0] {  OP_POP_FRONT  = 2'b00,
                               OP_POP_BACK   = 2'b01,
@@ -58,7 +57,6 @@ package dll_pkg;
     logic        valid;
     ptr_t        head;
     ptr_t        tail;
-    cnt_t        cnt;
   } queue_t;
 
   typedef struct packed {
