@@ -31,7 +31,8 @@
 package dll_pkg;
 
   localparam int ID_N  = 4;
-  localparam int PTR_N = 255;
+  localparam int PTR_N = 256;
+  localparam int PTR_DIV2_N = PTR_N / 2;
   localparam int PTR_W  = $clog2(PTR_N);
 
   typedef logic [$clog2(ID_N)-1:0] id_t;

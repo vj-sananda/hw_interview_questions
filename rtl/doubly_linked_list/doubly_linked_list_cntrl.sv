@@ -83,7 +83,8 @@ module doubly_linked_list_cntrl
   cmd_t                                 cmd_w;
   logic                                 cmd_en;
 
-  `SPSRAM_SIGNALS(ptr_table_, $bits(ptr_t), $clog2(PTR_N));
+  `SPSRAM_SIGNALS(ptr_table0_, $bits(ptr_pair_t), $clog2(PTR_DIV2_N));
+  `SPSRAM_SIGNALS(ptr_table1_, $bits(ptr_pair_t), $clog2(PTR_DIV2_N));
 
   // ------------------------------------------------------------------------ //
   //
@@ -116,11 +117,11 @@ module doubly_linked_list_cntrl
       //
       ptr_valid_en    = (cmd_w.valid | clear);
       ptr_valid_w     = ptr_valid_r;
-      casez ({clear, cmd_w.op [OP_PUSH_B]})
-        2'b1?: begin
+      casez ({clear, cmd_w.op})
+        3'b1_??: begin
           ptr_valid_w  = '0;
         end
-        2'b01: begin
+        3'b0_1?: begin
           ptr_valid_w [cmd_w.ptr]= '1;
         end
         default: begin
@@ -242,28 +243,28 @@ module doubly_linked_list_cntrl
 
   // ------------------------------------------------------------------------ //
   //
-  spsram #(.W($bits(ptr_t)), .N(PTR_N)) u_ptr_table0 (
+  spsram #(.W($bits(ptr_pair_t)), .N(PTR_DIV2_N)) u_ptr_table0 (
     //
       .clk                    (clk                )
     //
-    , .en                     (ptr_table_en       )
-    , .wen                    (ptr_table_wen      )
-    , .addr                   (ptr_table_addr     )
-    , .din                    (ptr_table_din      )
-    , .dout                   (ptr_table_dout     )
+    , .en                     (ptr_table0_en      )
+    , .wen                    (ptr_table0_wen     )
+    , .addr                   (ptr_table0_addr    )
+    , .din                    (ptr_table0_din     )
+    , .dout                   (ptr_table0_dout    )
   );
 
   // ------------------------------------------------------------------------ //
   //
-  spsram #(.W($bits(ptr_t)), .N(PTR_N)) u_ptr_table1 (
+  spsram #(.W($bits(ptr_pair_t)), .N(PTR_DIV2_N)) u_ptr_table1 (
     //
       .clk                    (clk                )
     //
-    , .en                     (ptr_table_en       )
-    , .wen                    (ptr_table_wen      )
-    , .addr                   (ptr_table_addr     )
-    , .din                    (ptr_table_din      )
-    , .dout                   ()
+    , .en                     (ptr_table1_en      )
+    , .wen                    (ptr_table1_wen     )
+    , .addr                   (ptr_table1_addr    )
+    , .din                    (ptr_table1_din     )
+    , .dout                   (ptr_table1_dout    )
   );
 
 

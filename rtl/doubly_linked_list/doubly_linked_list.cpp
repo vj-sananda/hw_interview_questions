@@ -82,10 +82,14 @@ struct DoublyLinkedListTb : libtb::TopLevel
 
       op.clear();
       const IdT id = random_integer_in_range(ID_N - 1);
-      if (cnt_ < PTR_N)
+      if (cnt_ < PTR_N) {
         op.push_back(PUSH_BACK);
-      if (expected_[id].size())
+//        op.push_back(PUSH_FRONT);
+      }
+      if (expected_[id].size()) {
+//        op.push_back(POP_BACK);
         op.push_back(POP_FRONT);
+      }
 
       if (op.size()) {
         if (*choose_random(op.begin(), op.end()) == PUSH_BACK) {
@@ -100,20 +104,25 @@ struct DoublyLinkedListTb : libtb::TopLevel
     }
     return false;
   }
-  void cmd_push(IdT id, DataT data) {
+  void cmd_push(IdT id, DataT data, bool back = true) {
     cmd_pass_ = true;
-    cmd_op_ = PUSH_BACK;
     cmd_id_ = id;
+    if (back) {
+      cmd_op_ = PUSH_BACK;
+      expected_[id].push_back(data);
+    } else {
+      cmd_op_ = PUSH_FRONT;
+      expected_[id].push_front(data);
+    }
     cmd_push_data_ = data;
-    expected_[id].push_back(data);
     t_wait_posedge_clk();
     cmd_idle();
     t_wait_posedge_clk();
   }
-  void cmd_pop(IdT id) {
+  void cmd_pop(IdT id, bool front = true) {
     DataT actual{};
     cmd_pass_ = true;
-    cmd_op_ = POP_FRONT;
+    cmd_op_ = front ? POP_FRONT : POP_BACK;
     cmd_id_ = id;
     t_wait_posedge_clk();
     t_wait_sync();
@@ -121,14 +130,19 @@ struct DoublyLinkedListTb : libtb::TopLevel
     if (expected_[id].size() == 0) {
       LIBTB_REPORT_ERROR("Pop from empty queue!");
     }
-    const DataT expected = expected_[id].front();
+    DataT expected;
+    expected = front ? expected_[id].front() : expected_[id].back();
     if (actual != expected) {
       std::stringstream ss;
       ss << "Mismatch:" << std::hex
          << "expected " << expected << " actual " << actual;
       LIBTB_REPORT_INFO(ss.str());
     }
-    expected_[id].pop_front();
+    if (front) {
+       expected_[id].pop_front();
+    } else {
+       expected_[id].pop_back();
+    }
     cmd_idle();
     t_wait_posedge_clk();
 
