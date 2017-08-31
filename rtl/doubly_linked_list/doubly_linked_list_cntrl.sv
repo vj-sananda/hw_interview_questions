@@ -104,7 +104,7 @@ module doubly_linked_list_cntrl
       queue_t q       = queue_table_r.q [cmd_id];
 
       //
-      ptr_table_n_en   = (q.valid & cmd_pass);
+      ptr_table_n_en   = q.valid & cmd_pass;
       ptr_table_n_wen  = cmd_op [OP_PUSH_B];
       ptr_table_n_addr = '0;
       ptr_table_n_din  = '0;
