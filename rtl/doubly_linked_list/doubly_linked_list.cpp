@@ -81,8 +81,7 @@ struct DoublyLinkedListTb : libtb::TopLevel
         LIBTB_REPORT_ERROR("device should not report full.");
 
       ops.clear();
-      //      const IdT id = random_integer_in_range(ID_N - 1);
-      const IdT id = 0;
+      const IdT id = random_integer_in_range(ID_N - 1);
       if (cnt_ < PTR_N) {
         ops.push_back(PUSH_BACK);
         ops.push_back(PUSH_FRONT);
@@ -117,6 +116,7 @@ struct DoublyLinkedListTb : libtb::TopLevel
     }
     cmd_push_data_ = data;
     t_wait_posedge_clk();
+    t_wait_sync();
     cmd_idle();
     t_wait_posedge_clk();
   }

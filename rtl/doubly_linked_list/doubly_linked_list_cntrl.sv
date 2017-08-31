@@ -105,12 +105,12 @@ module doubly_linked_list_cntrl
 
       //
       ptr_table_n_en   = cmd_pass;
-      ptr_table_n_wen  = cmd_op [OP_PUSH_B];
+      ptr_table_n_wen  = (q.valid & cmd_op [OP_PUSH_B]);
       ptr_table_n_addr = '0;
       ptr_table_n_din  = '0;
       //
       ptr_table_p_en   = cmd_pass;
-      ptr_table_p_wen  = cmd_op [OP_PUSH_B];
+      ptr_table_p_wen  = (q.valid & cmd_op [OP_PUSH_B]);
       ptr_table_p_addr = '0;
       ptr_table_p_din  = '0;
       case (cmd_op)
@@ -160,7 +160,7 @@ module doubly_linked_list_cntrl
           ptr_valid_w  = '0;
         end
         3'b0_1?: begin
-          ptr_valid_w [cmd_w.ptr]= '1;
+          ptr_valid_w [cmd_w.ptr] = '1;
         end
         default: begin
           ptr_t ptr = cmd_w.op [OP_BACK_B] ? cmd_w.q.tail : cmd_w.q.head;
