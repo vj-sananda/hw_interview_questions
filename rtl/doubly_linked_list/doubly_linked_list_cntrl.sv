@@ -104,13 +104,13 @@ module doubly_linked_list_cntrl
       queue_t q       = queue_table_r.q [cmd_id];
 
       //
-      ptr_table_n_en   = cmd_pass;
-      ptr_table_n_wen  = (q.valid & cmd_op [OP_PUSH_B]);
+      ptr_table_n_en   = (q.valid & cmd_pass);
+      ptr_table_n_wen  = cmd_op [OP_PUSH_B];
       ptr_table_n_addr = '0;
       ptr_table_n_din  = '0;
       //
-      ptr_table_p_en   = cmd_pass;
-      ptr_table_p_wen  = (q.valid & cmd_op [OP_PUSH_B]);
+      ptr_table_p_en   = q.valid & cmd_pass;
+      ptr_table_p_wen  = cmd_op [OP_PUSH_B];
       ptr_table_p_addr = '0;
       ptr_table_p_din  = '0;
       case (cmd_op)
