@@ -25,4 +25,4 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(pipelined_add_constant)
+EMIT_ANSWER(ultra_wide_accumulator)
