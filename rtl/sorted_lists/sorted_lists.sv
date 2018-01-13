@@ -195,7 +195,7 @@ module sorted_lists
   //
   n_d_t                                 ucode_upt_2_t_vld;
   n_d_t                                 ucode_upt_3_t_vld;
-  logic [$clog2(N):0]                   ucode_upt_3_t_popcnt;
+  logic [$clog2(N)-1:0]                 ucode_upt_3_t_popcnt;
   n_t                                   vld_not_set_e;
   n_d_t                                 ucode_upt_2_t_hit;
   n_t                                   hit_e;
@@ -206,7 +206,7 @@ module sorted_lists
   //
   table_state_t                         ucode_qry_X_sorted_r;
   n_d_t                                 ucode_qry_X_valid;
-  logic [$clog2(N):0]                   ucode_qry_X_valid_popcnt;
+  logic [$clog2(N)-1:0]                 ucode_qry_X_valid_popcnt;
   entry_t                               ucode_qry_X_entry;
   //
   table_state_t                         ucode_upt_2_t_fwd;

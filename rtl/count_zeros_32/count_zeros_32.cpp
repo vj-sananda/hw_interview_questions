@@ -68,10 +68,10 @@ struct CountZeros32Tb : libtb::TopLevel
     while (n--) {
       pass_ = true;
       const uint32_t x = libtb::random<uint32_t>();
-      const uint32_t cnt = bitset<32>(x).flip().count();
+      const uint32_t cnt = std::bitset<32>(x).flip().count();
       x_ = x;
       std::stringstream ss;
-      ss << "Validating bitmap: " << bitset<32>(x).to_string()
+      ss << "Validating bitmap: " << std::bitset<32>(x).to_string()
          << "  (ZERO=" << cnt << ")"
         ;
       LIBTB_REPORT_DEBUG(ss.str());

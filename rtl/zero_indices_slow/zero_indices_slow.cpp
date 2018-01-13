@@ -88,7 +88,7 @@ struct ZeroIndicesSlowTb : libtb::TopLevel
   void b_issue_in(const Stimulus & s)
   {
     std::stringstream ss;
-    bitset<32> b(s.v);
+    std::bitset<32> b(s.v);
     ss << "Issuing vector: " << b.to_string();
     LIBTB_REPORT_DEBUG(ss.str());
     
