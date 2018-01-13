@@ -25,7 +25,6 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-
 module ultra_wide_accumulator (
 
    //======================================================================== //
@@ -135,19 +134,23 @@ module ultra_wide_accumulator (
       ucode_w [0]                       = '0;
       ucode_w [0].a                     = acc_0_w;
       ucode_w [0].b                     = acc_1_w;
-      { ucode_w [0].c [0], ucode_w [0].d [0]}  = (ucode_w [0].a.w [0] + ucode_w [0].b.w [0]);
+      { ucode_w [0].c [0], ucode_w [0].d [0]}  =
+          (ucode_w [0].a.w [0] + ucode_w [0].b.w [0]);
       
       // Adder 1
       ucode_w [1]                       = ucode_r [0];
-      { ucode_w [1].c [1], ucode_w [1].d [1] }  = (ucode_r [0].a.w [1] + ucode_r [0].b.w [1] + w_t'(ucode_r [0].c [0]));
+      { ucode_w [1].c [1], ucode_w [1].d [1] }  =
+          (ucode_r [0].a.w [1] + ucode_r [0].b.w [1] + w_t'(ucode_r [0].c [0]));
       
       // Adder 2
       ucode_w [2]                       = ucode_r [1];
-      { ucode_w [2].c [2], ucode_w [2].d [2] }  = (ucode_r [1].a.w [2] + ucode_r [1].b.w [2] + w_t'(ucode_r [1].c [1]));
+      { ucode_w [2].c [2], ucode_w [2].d [2] }  =
+          (ucode_r [1].a.w [2] + ucode_r [1].b.w [2] + w_t'(ucode_r [1].c [1]));
       
       // Adder 3
       ucode_w [3]                       = ucode_r [2];
-      { ucode_w [3].c [3], ucode_w [3].d [3] }  = (ucode_r [2].a.w [3] + ucode_r [2].b.w [3] + w_t'(ucode_r [2].c [2]));
+      { ucode_w [3].c [3], ucode_w [3].d [3] }  =
+          (ucode_r [2].a.w [3] + ucode_r [2].b.w [3] + w_t'(ucode_r [2].c [2]));
 
       y_r                               = { ucode_r [3].d [3],
                                             ucode_r [3].d [2],
