@@ -25,7 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-#libtb2_build_systemc()
-add_subdirectory(systemc)
 add_subdirectory(libtb)
 add_subdirectory(libv2)

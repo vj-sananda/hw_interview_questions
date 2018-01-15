@@ -28,15 +28,9 @@
 cmake_minimum_required(VERSION 3.5)
 project(hw_interview_questions)
 
-set(SystemC_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/contrib/systemc/include)
-set(SystemC_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/contrib/systemc/lib/libsystemc.a)
-set(SYSTEMC_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/contrib/systemc/include)
-set(SYSTEMC_LIBDIR ${CMAKE_CURRENT_BINARY_DIR}/contrib/systemc/lib/)
-
 set(LIBTB2_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/contrib/libtb2/)
-
-set(LIBTB2_SYSTEMC_ENABLE 1)
 include(${LIBTB2_ROOT}/cmake/libtb2.cmake)
+
 include_directories(${CMAKE_SOURCE_DIR}/contrib/libtb/src)
 
 add_subdirectory(contrib)
