@@ -25,4 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(using_full_adders)
+hw_emit_legacy_sysc_answer(tb_using_full_adders
+  using_full_adders.sv using_full_adders.cpp)

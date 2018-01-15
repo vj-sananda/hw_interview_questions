@@ -25,4 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(linked_list_fifo)
+hw_emit_legacy_sysc_answer(tb_linked_list_fifo
+  linked_list_fifo.sv linked_list_fifo.cpp)

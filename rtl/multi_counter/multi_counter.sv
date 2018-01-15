@@ -309,19 +309,19 @@ module multi_counter #(
    //
   dpsram #(.N(CNTRS_N), .W(CNTRS_W)) u_state_table_ram (
       //
-        .clk1                  (clk)
-      , .en1                   (mem_prt1_en)
-      , .wen1                  (mem_prt1_wen)
-      , .addr1                 (mem_prt1_addr)
-      , .din1                  (mem_prt1_din)
-      , .dout1                 (mem_prt1_dout)
+        .clk0                  (clk)
+      , .en0                   (mem_prt1_en)
+      , .wen0                  (mem_prt1_wen)
+      , .addr0                 (mem_prt1_addr)
+      , .din0                  (mem_prt1_din)
+      , .dout0                 (mem_prt1_dout)
       //
-      , .clk2                  (clk)
-      , .en2                   (mem_prt2_en)
-      , .wen2                  (mem_prt2_wen)
-      , .addr2                 (mem_prt2_addr)
-      , .din2                  (mem_prt2_din)
-      , .dout2                 (mem_prt2_dout)
+      , .clk1                  (clk)
+      , .en1                   (mem_prt2_en)
+      , .wen1                  (mem_prt2_wen)
+      , .addr1                 (mem_prt2_addr)
+      , .din1                  (mem_prt2_din)
+      , .dout1                 (mem_prt2_dout)
    );
 
    // ======================================================================= //

@@ -25,6 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(multi_counter_variants)
-
-LIBPD_VIVADO(multi_counter_variants)
+hw_emit_legacy_sysc_answer(
+  tb_multi_counter_variants multi_counter_variants.sv multi_counter_variants.cpp)

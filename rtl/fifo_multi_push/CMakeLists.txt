@@ -25,5 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(fifo_multi_push)
-LIBPD_VIVADO(fifo_multi_push)
+hw_emit_legacy_sysc_answer(tb_fifo_multi_push
+  fifo_multi_push.sv fifo_multi_push.cpp)

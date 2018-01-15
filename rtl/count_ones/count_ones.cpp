@@ -26,7 +26,7 @@
 //========================================================================== //
 
 #include <libtb.h>
-#include "Vcount_ones.h"
+#include "vobj/Vcount_ones.h"
 
 #define PORTS(__func)                           \
     __func(A, WordT)                            \

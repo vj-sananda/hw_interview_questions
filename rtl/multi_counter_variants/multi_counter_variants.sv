@@ -331,24 +331,24 @@ module multi_counter_variants #(
         fwd__s3_to_s1: p2_ucode_w.dat  = p3_ucode_r.dat;
         fwd__s4_to_s1: p2_ucode_w.dat  = p4_ucode_r.dat;
         default:       p2_ucode_w.dat  =
-           (p1_ucode_r.op == OP_INIT) ? p1_ucode_r.dat : s3_sram_dout1;
+           (p1_ucode_r.op == OP_INIT) ? p1_ucode_r.dat : s3_sram_dout0;
       endcase // case (1'b1)
 
       p4_ucode_w        = p3_ucode_r;
 
       // WRBK (S3)
-      s3_sram_en2       = p3_valid_r & p3_ucode_r.op [OP_WRITE_B];
-      s3_sram_wen2      = '1;
-      s3_sram_addr2     = p3_ucode_r.id;
-      s3_sram_din2      = p3_ucode_r.dat;
+      s3_sram_en1       = p3_valid_r & p3_ucode_r.op [OP_WRITE_B];
+      s3_sram_wen1      = '1;
+      s3_sram_addr1     = p3_ucode_r.id;
+      s3_sram_din1      = p3_ucode_r.dat;
 
-      s0_collision      = s3_sram_en2 & (p0_ucode_r.id == p3_ucode_r.id);
+      s0_collision      = s3_sram_en1 & (p0_ucode_r.id == p3_ucode_r.id);
 
       // LKUP (S1)
-      s3_sram_en1       = p0_valid_r & (~s0_collision);
-      s3_sram_wen1      = '0;
-      s3_sram_addr1     = p0_ucode_r.id;
-      s3_sram_din1      = '0;
+      s3_sram_en0       = p0_valid_r & (~s0_collision);
+      s3_sram_wen0      = '0;
+      s3_sram_addr0     = p0_ucode_r.id;
+      s3_sram_din0      = '0;
 
       //
       s3_pass_w         = p3_valid_r & p3_ucode_r.op [OP_OUTPUT_B];
@@ -361,19 +361,19 @@ module multi_counter_variants #(
   //
   dpsram #(.W(W), .N(N)) u_s3_sram (
      //
-       .clk1               (clk                     )
+       .clk0               (clk                     )
+     , .en0                (s3_sram_en0             )
+     , .wen0               (s3_sram_wen0            )
+     , .addr0              (s3_sram_addr0           )
+     , .din0               (s3_sram_din0            )
+     , .dout0              (s3_sram_dout0           )
+     //
+     , .clk1               (clk                     )
      , .en1                (s3_sram_en1             )
      , .wen1               (s3_sram_wen1            )
      , .addr1              (s3_sram_addr1           )
      , .din1               (s3_sram_din1            )
      , .dout1              (s3_sram_dout1           )
-     //
-     , .clk2               (clk                     )
-     , .en2                (s3_sram_en2             )
-     , .wen2               (s3_sram_wen2            )
-     , .addr2              (s3_sram_addr2           )
-     , .din2               (s3_sram_din2            )
-     , .dout2              (s3_sram_dout2           )
   );
 
   // ------------------------------------------------------------------------ //

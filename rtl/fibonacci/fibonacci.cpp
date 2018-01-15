@@ -27,7 +27,7 @@
 
 #include <libtb.h>
 #include <sstream>
-#include "Vfibonacci.h"
+#include "vobj/Vfibonacci.h"
 
 #define PORTS(__func)                           \
     __func(y, uint32_t)

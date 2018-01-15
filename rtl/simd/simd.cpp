@@ -28,7 +28,7 @@
 #include <libtb.h>
 #include <deque>
 #include <vector>
-#include "Vsimd.h"
+#include "vobj/Vsimd.h"
 
 #define PORTS(__func)                           \
   __func(pass, bool)                            \

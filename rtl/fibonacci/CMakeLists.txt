@@ -25,4 +25,4 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(fibonacci)
+hw_emit_legacy_sysc_answer(tb_fibonacci fibonacci.sv fibonacci.cpp)

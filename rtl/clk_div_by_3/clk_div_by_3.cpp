@@ -26,7 +26,7 @@
 //========================================================================== //
 
 #include <libtb.h>
-#include "Vclk_div_by_3.h"
+#include "vobj/Vclk_div_by_3.h"
 
 #define PORTS(__func)                           \
   __func(clk_div_3, bool)

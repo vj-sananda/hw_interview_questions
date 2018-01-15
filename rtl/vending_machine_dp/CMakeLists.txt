@@ -25,5 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(vending_machine_dp)
-LIBPD_VIVADO(vending_machine_dp)
+hw_emit_legacy_sysc_answer(tb_vending_machine_dp
+  vending_machine_dp.sv vending_machine_dp.cpp)

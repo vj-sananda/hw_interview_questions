@@ -28,7 +28,7 @@
 #include <libtb.h>
 #include <deque>
 #include <sstream>
-#include "Vmcp_formulation.h"
+#include "vobj/Vmcp_formulation.h"
 
 #define PORTS(__func)                           \
     __func(l_in_pass_r, bool)                   \

@@ -26,7 +26,7 @@
 //========================================================================== //
 
 #include <libtb.h>
-#include "Vdetect_sequence.h"
+#include "vobj/Vdetect_sequence.h"
 
 #define PORTS(__func)                           \
     __func(in, bool)                            \

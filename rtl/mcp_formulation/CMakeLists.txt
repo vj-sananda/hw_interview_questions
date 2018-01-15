@@ -25,4 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(mcp_formulation)
+hw_emit_legacy_sysc_answer(tb_mcp_formulation
+  mcp_formulation.sv mcp_formulation.cpp)

@@ -25,4 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(count_zeros_32)
+hw_emit_legacy_sysc_answer(tb_count_zeros_32
+  count_zeros_32.sv count_zeros_32.cpp)

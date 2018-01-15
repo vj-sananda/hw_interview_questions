@@ -25,5 +25,4 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(sorted_lists)
-LIBPD_VIVADO(sorted_lists)
+hw_emit_legacy_sysc_answer(tb_sorted_lists sorted_lists.sv sorted_lists.cpp)

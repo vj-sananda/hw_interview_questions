@@ -26,7 +26,7 @@
 //========================================================================== //
 
 #include <libtb.h>
-#include "Vincrement.h"
+#include "vobj/Vfast_increment.h"
 
 #define PORTS(__func)                           \
     __func(A, WordT)                            \
@@ -74,12 +74,11 @@ struct IncrementTb : libtb::TopLevel
     PORTS(__declare_signals)
 #undef __declare_signals
 
-    Vincrement uut_;
+    Vfast_increment uut_;
 };
 
 int sc_main(int argc, char **argv)
 {
     using namespace libtb;
-
     return LibTbSim<IncrementTb>(argc, argv).start();
 }

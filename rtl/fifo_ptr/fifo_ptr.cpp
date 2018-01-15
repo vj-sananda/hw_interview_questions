@@ -28,7 +28,7 @@
 #include <libtb.h>
 #include <deque>
 #include <sstream>
-#include "Vfifo_ptr.h"
+#include "vobj/Vfifo_ptr.h"
 
 #define FIFO_PORTS(__func)                      \
     __func(push, bool)                          \

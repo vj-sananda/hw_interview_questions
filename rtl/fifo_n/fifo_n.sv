@@ -225,21 +225,23 @@ module fifo_n #(parameter int N = 8,
 
   // ------------------------------------------------------------------------ //
   //
-  dpsrams #(.W(W), .N(FIFO_N)) u_fifo_mem (
+  dpsram #(.W(W), .N(FIFO_N)) u_fifo_mem (
     //
-      .clk                    (clk                )
+      .clk0                   (clk                )
     // 
-    , .en1                    (en1                )
-    , .wen1                   (1'b1               )
-    , .addr1                  (wr_addr            )
-    , .din1                   (push_data          )
-    , .dout1                  (                   )
+    , .en0                    (en1                )
+    , .wen0                   (1'b1               )
+    , .addr0                  (wr_addr            )
+    , .din0                   (push_data          )
+    , .dout0                  (                   )
     //
-    , .en2                    (en2                )
-    , .wen2                   (1'b0               )
-    , .addr2                  (rd_addr            )
-    , .din2                   (                   )
-    , .dout2                  (pop_data_w         )
+    , .clk1                   (clk                )
+    //
+    , .en1                    (en2                )
+    , .wen1                   (1'b0               )
+    , .addr1                  (rd_addr            )
+    , .din1                   (                   )
+    , .dout1                  (pop_data_w         )
   );                          
 
 endmodule

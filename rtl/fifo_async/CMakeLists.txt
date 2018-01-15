@@ -25,5 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== ##
 
-EMIT_ANSWER(fifo_async_tb)
-LIBPD_VIVADO(fifo_async)
+hw_emit_legacy_sysc_answer(tb_fifo_async
+  fifo_async_tb.sv fifo_async_tb.cpp)

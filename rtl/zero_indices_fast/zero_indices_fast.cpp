@@ -30,7 +30,7 @@
 #include <sstream>
 #include <bitset>
 
-#include "Vzero_indices_fast.h"
+#include "vobj/Vzero_indices_fast.h"
 
 #define ZERO_PROBABILITY 20
 

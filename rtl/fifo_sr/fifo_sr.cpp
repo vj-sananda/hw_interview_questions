@@ -28,7 +28,7 @@
 #include <libtb.h>
 #include <deque>
 #include <sstream>
-#include "Vfifo_sr.h"
+#include "vobj/Vfifo_sr.h"
 
 #define PORTS(__func)                           \
   __func(push, bool)                            \

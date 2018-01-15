@@ -506,31 +506,31 @@ module sorted_lists
 
       // RD port
       //
-      upt_table_en1         = upt_pipe_vld_r [0] & (~upt_table_wrbk_vld_w);
-      upt_table_wen1        = '0;
-      upt_table_addr1       = ucode_upt_0_r.u.id;
-      upt_table_din1        = '0;
+      upt_table_en0         = upt_pipe_vld_r [0] & (~upt_table_wrbk_vld_w);
+      upt_table_wen0        = '0;
+      upt_table_addr0       = ucode_upt_0_r.u.id;
+      upt_table_din0        = '0;
 
       // WR port
       //
-      upt_table_en2         = upt_pipe_vld_r [3];
-      upt_table_wen2        = '1;
-      upt_table_addr2       = ucode_upt_3_r.u.id;
-      upt_table_din2        = ucode_upt_3_r.t;
+      upt_table_en1         = upt_pipe_vld_r [3];
+      upt_table_wen1        = '1;
+      upt_table_addr1       = ucode_upt_3_r.u.id;
+      upt_table_din1        = ucode_upt_3_r.t;
 
       // RD port
       //
-      qry_table_en1         = qry_pipe_vld_r [0];
-      qry_table_wen1        = '0;
-      qry_table_addr1       = ucode_qry_0_r.id;
-      qry_table_din1        = '0;
+      qry_table_en0         = qry_pipe_vld_r [0];
+      qry_table_wen0        = '0;
+      qry_table_addr0       = ucode_qry_0_r.id;
+      qry_table_din0        = '0;
 
       // WR port
       //
-      qry_table_en2         = upt_table_en2;
-      qry_table_wen2        = upt_table_wen2;
-      qry_table_addr2       = upt_table_addr2;
-      qry_table_din2        = upt_table_din2;
+      qry_table_en1         = upt_table_en1;
+      qry_table_wen1        = upt_table_wen1;
+      qry_table_addr1       = upt_table_addr1;
+      qry_table_din1        = upt_table_din1;
 
     end // block: qry_table_w_PROC
 
@@ -744,41 +744,45 @@ module sorted_lists
 
   // ------------------------------------------------------------------------ //
   //
-  dpsrams #(.W($bits(table_state_t)), .N(M)) u_upt_table (
+  dpsram #(.W($bits(table_state_t)), .N(M)) u_upt_table (
     //
-      .clk                    (clk                )
+      .clk0                   (clk                )
+    //
+    , .en0                    (upt_table_en0      )
+    , .wen0                   (upt_table_wen0     )
+    , .addr0                  (upt_table_addr0    )
+    , .din0                   (upt_table_din0     )
+    , .dout0                  (upt_table_dout0    )
+    //
+    , .clk1                   (clk                )
     //
     , .en1                    (upt_table_en1      )
     , .wen1                   (upt_table_wen1     )
     , .addr1                  (upt_table_addr1    )
     , .din1                   (upt_table_din1     )
     , .dout1                  (upt_table_dout1    )
-    //
-    , .en2                    (upt_table_en2      )
-    , .wen2                   (upt_table_wen2     )
-    , .addr2                  (upt_table_addr2    )
-    , .din2                   (upt_table_din2     )
-    , .dout2                  (upt_table_dout2    )
   );
 
 
   // ------------------------------------------------------------------------ //
   //
-  dpsrams #(.W($bits(table_state_t)), .N(M)) u_qry_table (
+  dpsram #(.W($bits(table_state_t)), .N(M)) u_qry_table (
     //
-      .clk                    (clk                )
+      .clk0                   (clk                )
+    //
+    , .en0                    (qry_table_en0      )
+    , .wen0                   (qry_table_wen0     )
+    , .addr0                  (qry_table_addr0    )
+    , .din0                   (qry_table_din0     )
+    , .dout0                  (qry_table_dout0    )
+    //
+    , .clk1                   (clk                )
     //
     , .en1                    (qry_table_en1      )
     , .wen1                   (qry_table_wen1     )
     , .addr1                  (qry_table_addr1    )
     , .din1                   (qry_table_din1     )
     , .dout1                  (qry_table_dout1    )
-    //
-    , .en2                    (qry_table_en2      )
-    , .wen2                   (qry_table_wen2     )
-    , .addr2                  (qry_table_addr2    )
-    , .din2                   (qry_table_din2     )
-    , .dout2                  (qry_table_dout2    )
   );
 
 endmodule

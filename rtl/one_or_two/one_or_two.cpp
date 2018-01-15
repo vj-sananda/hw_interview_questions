@@ -27,7 +27,7 @@
 
 #include <libtb.h>
 #include <sstream>
-#include "Vone_or_two.h"
+#include "vobj/Vone_or_two.h"
 
 constexpr int OPT_W = 32;
 

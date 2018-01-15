@@ -28,7 +28,7 @@
 #include <libtb.h>
 #include <deque>
 #include <sstream>
-#include "Vultra_wide_accumulator.h"
+#include "vobj/Vultra_wide_accumulator.h"
 
 #define PORTS(__func)                           \
   __func(pass, bool)                            \

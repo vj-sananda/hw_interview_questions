@@ -26,7 +26,7 @@
 //========================================================================== //
 
 #include <libtb.h>
-#include "Vvending_machine_fsm.h"
+#include "vobj/Vvending_machine_fsm.h"
 
 #define PORTS(__func)                           \
     __func(nickel, bool)                        \

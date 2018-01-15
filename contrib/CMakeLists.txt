@@ -25,14 +25,7 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-ADD_SUBDIRECTORY(systemc)
-FIND_PACKAGE(SystemC REQUIRED)
-#
-FIND_PACKAGE(Verilator REQUIRED)
-BUILD_VERILATOR_LIBS()
-#
-ADD_SUBDIRECTORY(libtb)
-ADD_SUBDIRECTORY(libv)
-
-FIND_PACKAGE(Vivado)
-ADD_SUBDIRECTORY(libpd)
+#libtb2_build_systemc()
+add_subdirectory(systemc)
+add_subdirectory(libtb)
+add_subdirectory(libv2)

@@ -25,4 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(fused_multiply_add)
+hw_emit_legacy_sysc_answer(tb_fused_multiply_add
+  fused_multiply_add.sv fused_multiply_add.cpp)

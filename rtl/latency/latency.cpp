@@ -28,7 +28,7 @@
 #include <libtb.h>
 #include <sstream>
 #include "delay_pipe.h"
-#include "Vlatency.h"
+#include "vobj/Vlatency.h"
 
 #define PORTS(__func)                           \
     __func(issue, bool)                         \

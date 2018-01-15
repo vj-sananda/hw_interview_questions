@@ -26,7 +26,7 @@
 //========================================================================== //
 
 #include <libtb.h>
-#include "Vgates_from_MUX2X1.h"
+#include "vobj/Vgates_from_MUX2X1.h"
 
 #define PORTS(__func)                           \
     __func(a, bool)                             \

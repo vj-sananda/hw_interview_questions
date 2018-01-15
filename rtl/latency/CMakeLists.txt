@@ -25,5 +25,4 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(latency)
-LIBPD_VIVADO(latency)
+hw_emit_legacy_sysc_answer(tb_latency latency.sv latency.cpp)

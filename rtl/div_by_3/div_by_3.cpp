@@ -27,7 +27,7 @@
 
 #include <libtb.h>
 #include <deque>
-#include "Vdiv_by_3.h"
+#include "vobj/Vdiv_by_3.h"
 
 #define PORTS(__func)                           \
   __func(pass, bool)                            \

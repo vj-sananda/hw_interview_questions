@@ -1,5 +1,5 @@
 ##========================================================================== //
-## Copyright (c) 2016, Stephen Henry
+## Copyright (c) 2016-2018, Stephen Henry
 ## All rights reserved.
 ##
 ## Redistribution and use in source and binary forms, with or without
@@ -25,24 +25,19 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-CMAKE_MINIMUM_REQUIRED(VERSION 3.2)
-PROJECT(hw_interview_questions)
+cmake_minimum_required(VERSION 3.5)
+project(hw_interview_questions)
 
-SET(CMAKE_CXX_STANDARD 11)
+set(SystemC_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/contrib/systemc/include)
+set(SystemC_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/contrib/systemc/lib/libsystemc.a)
+set(SYSTEMC_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/contrib/systemc/include)
+set(SYSTEMC_LIBDIR ${CMAKE_CURRENT_BINARY_DIR}/contrib/systemc/lib/)
 
-# Each 'answer' replicates the same set of CMAKE targets. Although the targets
-# are in different directories, and therefore do not conflict, CMAKE
-# specifically disallows such a construction to remain compatible with GUI IDE.
-#
-set_property(GLOBAL PROPERTY ALLOW_DUPLICATE_CUSTOM_TARGETS 1)
+set(LIBTB2_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/contrib/libtb2/)
 
-SET(CMAKE_MODULE_PATH
-  ${CMAKE_MODULE_PATH}
-  ${CMAKE_SOURCE_DIR}/cmake
-  ${CMAKE_SOURCE_DIR}/contrib/libtb/cmake
-  ${CMAKE_SOURCE_DIR}/contrib/libpd/cmake
-  )
+set(LIBTB2_SYSTEMC_ENABLE 1)
+include(${LIBTB2_ROOT}/cmake/libtb2.cmake)
+include_directories(${CMAKE_SOURCE_DIR}/contrib/libtb/src)
 
-INCLUDE(cmake/Macros.cmake)
-ADD_SUBDIRECTORY(contrib)
-ADD_SUBDIRECTORY(rtl)
+add_subdirectory(contrib)
+add_subdirectory(rtl)

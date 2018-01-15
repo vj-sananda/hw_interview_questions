@@ -25,5 +25,4 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(one_or_two)
-LIBPD_VIVADO(one_or_two)
+hw_emit_legacy_sysc_answer(tb_one_to_two one_or_two.sv one_or_two.cpp)

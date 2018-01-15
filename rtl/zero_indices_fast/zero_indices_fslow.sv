@@ -27,7 +27,7 @@
 
 `define HAS_FINAL
 
-module zero_indices_fast #(parameter int W = 128) (
+module zero_indices_fslow #(parameter int W = 32) (
 
    //======================================================================== //
    //                                                                         //
@@ -46,9 +46,21 @@ module zero_indices_fast #(parameter int W = 128) (
    //======================================================================== //
 
    , input          [W-1:0]                  in_vector
-   , input                                   in_start
+   , input                                   in_load
+
+   //======================================================================== //
+   //                                                                         //
+   // Cntrl                                                                   //
+   //                                                                         //
+   //======================================================================== //
+
    //
-   , output                                  in_busy_r
+   , input                                   en
+   //
+   , output                                  done_r
+`ifdef HAS_FINAL
+   , output logic                            final_r
+`endif
 
    //======================================================================== //
    //                                                                         //
@@ -56,51 +68,64 @@ module zero_indices_fast #(parameter int W = 128) (
    //                                                                         //
    //======================================================================== //
 
-   , output logic                            resp_valid_r
-   , output logic   [6:0]                    resp_index_r
+   , output logic                            resp_valid
+   , output logic   [$clog2(W)-1:0]          resp_index
+
 );
-  localparam int V = 16;
-  localparam int X = (W / V);
 
-  typedef logic [V-1:0] v_t;
-  typedef struct packed {
-    v_t [X-1:0] v;
-  } w_t;
-  typedef logic [X-1:0] x_t;
-  typedef logic [$clog2(X)-1:0] x_e_t;
-  typedef logic [$clog2(V)-1:0] v_e_t;
-  typedef struct packed {
-    x_e_t  x;
-    v_e_t  v;
-  } resp_index_t;
+  typedef logic [W-1:0] w_t;
+  typedef logic [$clog2(W)-1:0] idx_t;
 
-  typedef struct packed {
-    v_e_t [X-1:0] v;
-  } slow_resp_index_t;
+  function w_t ffs (w_t x);
+    begin
+      w_t w = '0;
+      for (int i = W - 1; i >= 0; i--)
+        if (x [i])
+          w = 1 << i;
+      return w;
+    end
+  endfunction // ffs
 
-  w_t                 vector_w;
-  //
-  x_t                 has_zeros_n_w;
-  //
-  logic               resp_valid_w;
-  resp_index_t        resp_index_w;
-  //
-  logic               select_resp_valid;
-  x_e_t               select_resp_index;
-  //
-  logic               select_en;
-  logic               select_done_r;
-  //
-  x_t                 slow_en;
-  x_t                 slow_done_r;
+  function idx_t encode (w_t x);
+    begin
+      idx_t idx = 0;
+      for (int i = W - 1; i >= 0; i--)
+        if (x [i])
+          idx = idx_t'(i);
+      return idx;
+    end
+  endfunction // encode
 `ifdef HAS_FINAL
-  x_t                 slow_final_r;
+  
+  function logic is_1h (w_t x);
+    begin
+      w_t n_x = (~x);
+      return (n_x & (n_x - 'b1)) == '0 ? 1'b1 : 1'b0;
+    end
+  endfunction // is_1h
 `endif
   //
-  x_t                 slow_resp_valid_r;
-  slow_resp_index_t   slow_resp_index_r;
+  w_t                                vector_r;
+  w_t                                vector_w;
+  logic                              vector_en;
   //
-  logic               in_busy_w;
+  logic                              busy_r;
+  logic                              busy_w;
+  logic                              busy_en;
+  //
+  logic                              done_r;
+  logic                              done_w;
+`ifdef HAS_FINAL
+  //
+  logic                              final_w;
+`endif
+  //
+  logic                              zeros_present;
+  //
+  w_t                                first_zero;
+  //
+  logic                              resp_valid;
+  idx_t                              resp_index;
 
   // ======================================================================== //
   //                                                                          //
@@ -110,143 +135,89 @@ module zero_indices_fast #(parameter int W = 128) (
 
   // ------------------------------------------------------------------------ //
   //
-  always_comb
-    begin : resp_PROC
-
-      resp_valid_w = '0;
-      for (int i = 0; i < X; i++)
-        resp_valid_w |= select_resp_valid & slow_resp_valid_r [select_resp_index];
-
-      resp_index_w = '0;
-      resp_index_w.x = select_resp_index;
-      resp_index_w.v = slow_resp_index_r.v [select_resp_index];
-
-    end // block: resp_PROC
-  
-  // ------------------------------------------------------------------------ //
-  //
-  always_comb
-    begin : select_PROC
-
-      //
-`ifdef HAS_FINAL
-      select_en = in_start | (select_resp_valid & slow_final_r [select_resp_index]);
-`else
-      select_en = in_start | (select_resp_valid & slow_done_r [select_resp_index]);
-`endif
-    end
-  
-  // ------------------------------------------------------------------------ //
-  //
-  always_comb
-    begin : slow_PROC
-
-      //
-      for (int i =0 ; i < X; i++)
-        slow_en [i] = select_resp_valid & (select_resp_index == x_e_t'(i));
-            
-    end
+  always_comb first_zero = ffs(~vector_r);
   
   // ------------------------------------------------------------------------ //
   //
   always_comb
     begin
+      
+      //
+      casez ({in_load, en})
+        2'b1?:   vector_w = in_vector;
+        2'b01:   vector_w = vector_r | first_zero;
+        default: vector_w = vector_r;
+      endcase // casez ({in_start, en})
 
       //
-      vector_w = in_vector;
+      vector_en = (in_load | en);
 
       //
-      for (int i = 0; i < X; i++)
-        has_zeros_n_w [i] = ~(in_vector [i * V +: V] != '1);
+      zeros_present = (vector_w != '1);
+      
+      //
+      busy_w = in_load | busy_r & zeros_present;
+
+      //
+      busy_en = in_load | en;
+
+      //
+      done_w  = busy_r & (vector_w == '1);
+
+`ifdef HAS_FINAL
+      //
+      final_w = busy_w & is_1h(vector_w);
+`endif
 
     end
-  
+
   // ------------------------------------------------------------------------ //
   //
   always_comb
-    begin : in_busy_PROC
+    begin : resp_PROC
 
       //
-      in_busy_w = in_start | in_busy_r & (~select_done_r);
+      resp_valid = busy_r & (vector_r != '1);
+      resp_index = encode(first_zero);
 
-    end
-
+    end // block: resp_PROC
+  
   // ======================================================================== //
   //                                                                          //
-  // Sequential Logic                                                         //
+  // Flops                                                                    //
   //                                                                          //
   // ======================================================================== //
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      busy_r <= '0;
+    else if (busy_en)
+      busy_r <= busy_w;
+`ifdef HAS_FINAL  
 
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
     if (rst)
-      resp_valid_r <= '0;
+      final_r <= '0;
     else
-      resp_valid_r <= resp_valid_w;
-  
-  // ------------------------------------------------------------------------ //
-  //
-  always_ff @(posedge clk)
-    if (resp_valid_w)
-      resp_index_r <= resp_index_w;
- 
+      final_r <= final_w;
+`endif  
+
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
     if (rst)
-      in_busy_r <= '0;
+      done_r <= '0;
     else
-      in_busy_r <= in_busy_w;
-
-  // ======================================================================== //
-  //                                                                          //
-  // Instances                                                                //
-  //                                                                          //
-  // ======================================================================== //
-
-  // ------------------------------------------------------------------------ //
-  //
-  zero_indices_fslow #(.W(X)) u_zero_indices_select (
-    //
-      .clk                    (clk                )
-    , .rst                    (rst                )
-    //
-    , .in_vector              (has_zeros_n_w      )
-    , .in_load                (in_start           )
-    //
-    , .en                     (select_en          )
-    , .done_r                 (select_done_r      )
-`ifdef HAS_FINAL
-    , .final_r                ()
-`endif
-    //
-    , .resp_valid             (select_resp_valid  )
-    , .resp_index             (select_resp_index  )
-  );
+      done_r <= done_w;
   
   // ------------------------------------------------------------------------ //
   //
-  generate for (genvar g = 0; g < X; g++) begin
-  
-  zero_indices_fslow #(.W(V)) u_zero_indices_fslow (
-    //
-      .clk                    (clk                )
-    , .rst                    (rst                )
-    //
-    , .in_vector              (vector_w.v [g]     )
-    , .in_load                (in_start           )
-    //
-    , .en                     (slow_en [g]        )
-    , .done_r                 (slow_done_r [g]    )
-`ifdef HAS_FINAL
-    , .final_r                (slow_final_r [g]   )
-`endif
-    //
-    , .resp_valid             (slow_resp_valid_r [g])
-    , .resp_index             (slow_resp_index_r.v [g])
-  );
-
-  end endgenerate
+  always_ff @(posedge clk)
+    if (vector_en)
+      vector_r <= vector_w;
 
 endmodule // zero_indices_slow

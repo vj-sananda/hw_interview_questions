@@ -32,8 +32,6 @@ module fifo_async_tb (/*AUTOARG*/
   // Inputs
   wrst, wclk, rrst, rclk, push_data, push, pop
   );
-`define __OVERRIDE_CLK wclk
-`include "libtb_tb_top_inc.vh"
   /*AUTOINPUT*/
   // Beginning of automatic inputs (from unused autoinst inputs)
   input                 pop;                    // To u_fifo_async of fifo_async.v

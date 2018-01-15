@@ -1,5 +1,5 @@
 //========================================================================== //
-// Copyright (c) 2017, Stephen Henry
+// Copyright (c) 2016, Stephen Henry
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -25,9 +25,10 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-`define HAS_FINAL
-
-module zero_indices_slow #(parameter int W = 32) (
+module mem_egress_pipe #(
+    parameter int W = 8
+  , parameter int MEMORY_LATENCY_N = 2
+) (
 
    //======================================================================== //
    //                                                                         //
@@ -38,94 +39,67 @@ module zero_indices_slow #(parameter int W = 32) (
      input                                   clk
    , input                                   rst
 
-
    //======================================================================== //
    //                                                                         //
-   // In                                                                      //
-   //                                                                         //
-   //======================================================================== //
-
-   , input          [W-1:0]                  in_vector
-   , input                                   in_load
-
-   //======================================================================== //
-   //                                                                         //
-   // Cntrl                                                                   //
+   // Control Interface                                                       //
    //                                                                         //
    //======================================================================== //
 
+   , input                                   read_en
    //
-   , input                                   en
+   , output logic                            read_adv
+
+   //======================================================================== //
+   //                                                                         //
+   // Mem Interface                                                           //
+   //                                                                         //
+   //======================================================================== //
+
+   , input         [W-1:0]                   mem_rdata
+   , output logic                            mem_ren
+
+   //======================================================================== //
+   //                                                                         //
+   // Egress                                                                  //
+   //                                                                         //
+   //======================================================================== //
+
+   , input                                   out_accept
    //
-   , output                                  done_r
-`ifdef HAS_FINAL
-   , output logic                            final_r
-`endif
-
-   //======================================================================== //
-   //                                                                         //
-   // Reponse                                                                 //
-   //                                                                         //
-   //======================================================================== //
-
-   , output logic                            resp_valid
-   , output logic   [$clog2(W)-1:0]          resp_index
-
+   , output logic                            out_valid_r
+   , output logic [W-1:0]                    out_data_r
 );
 
-  typedef logic [W-1:0] w_t;
-  typedef logic [$clog2(W)-1:0] idx_t;
+  // ======================================================================== //
+  //                                                                          //
+  // Wires                                                                    //
+  //                                                                          //
+  // ======================================================================== //
 
-  function w_t ffs (w_t x);
-    begin
-      w_t w = '0;
-      for (int i = W - 1; i >= 0; i--)
-        if (x [i])
-          w = 1 << i;
-      return w;
-    end
-  endfunction // ffs
-
-  function idx_t encode (w_t x);
-    begin
-      idx_t idx = 0;
-      for (int i = W - 1; i >= 0; i--)
-        if (x [i])
-          idx = idx_t'(i);
-      return idx;
-    end
-  endfunction // encode
-`ifdef HAS_FINAL
-  
-  function logic is_1h (w_t x);
-    begin
-      w_t n_x = (~x);
-      return (n_x & (n_x - 'b1)) == '0 ? 1'b1 : 1'b0;
-    end
-  endfunction // is_1h
-`endif
+  logic                                      s0_adv;
+  logic                                      s0_stall;
   //
-  w_t                                vector_r;
-  w_t                                vector_w;
-  logic                              vector_en;
+  logic                                      s1_stall;
   //
-  logic                              busy_r;
-  logic                              busy_w;
-  logic                              busy_en;
+  logic                                      s1_valid_w;
+  logic                                      s1_valid_r;
   //
-  logic                              done_r;
-  logic                              done_w;
-`ifdef HAS_FINAL
+  logic                                      s2_stall;
+  logic                                      s2_en;
   //
-  logic                              final_w;
-`endif
+  logic [W-1:0]                              s2_ucode_r;
+  logic [W-1:0]                              s2_ucode_w;
   //
-  logic                              zeros_present;
+  logic                                      s2_valid_w;
+  logic                                      s2_valid_r;
   //
-  w_t                                first_zero;
+  logic                                      s1_pass;
+  logic [W-1:0]                              s1_retain_w;
+  logic [W-1:0]                              s1_retain_r;
+  logic                                      s1_retain_en;
   //
-  logic                              resp_valid;
-  idx_t                              resp_index;
+  logic                                      s1_retain_valid_w;
+  logic                                      s1_retain_valid_r;
 
   // ======================================================================== //
   //                                                                          //
@@ -133,91 +107,60 @@ module zero_indices_slow #(parameter int W = 32) (
   //                                                                          //
   // ======================================================================== //
 
-  // ------------------------------------------------------------------------ //
   //
-  always_comb first_zero = ffs(~vector_r);
-  
-  // ------------------------------------------------------------------------ //
+  always_comb mem_ren  = s0_adv;
+  always_comb read_adv = s0_adv;
+  always_comb out_valid_r  = s2_valid_r;
+  always_comb out_data_r = s2_ucode_r;
   //
-  always_comb
-    begin
-      
-      //
-      casez ({in_load, en})
-        2'b1?:   vector_w = in_vector;
-        2'b01:   vector_w = vector_r | first_zero;
-        default: vector_w = vector_r;
-      endcase // casez ({in_start, en})
-
-      //
-      vector_en = (in_load | en);
-
-      //
-      zeros_present = (vector_w != '1);
-      
-      //
-      busy_w = in_load | busy_r & zeros_present;
-
-      //
-      busy_en = in_load | en;
-
-      //
-      done_w  = busy_r & (vector_w == '1);
-
-`ifdef HAS_FINAL
-      //
-      final_w = busy_w & is_1h(vector_w);
-`endif
-
-    end
-
-  // ------------------------------------------------------------------------ //
+  always_comb s0_adv  = read_en & (~s0_stall);
+  always_comb s0_stall = s1_stall;
   //
-  always_comb
-    begin : resp_PROC
+  always_comb s1_stall =  (s1_retain_valid_r | s1_valid_r) & s2_stall;
+  always_comb s1_valid_w  = (~rst) & s0_adv;
+  always_comb s1_retain_w  = mem_rdata;
+  always_comb s1_retain_en  = s1_valid_r & s1_stall;
+  always_comb s1_pass = s1_valid_r | s1_retain_valid_r;
+  always_comb s1_retain_valid_w  = (~rst) & (s1_pass & s1_stall);
+  //
+  always_comb s2_en = (~s2_stall) & (s1_valid_r | s1_retain_valid_r);
+  always_comb s2_stall  = out_valid_r & (~out_accept);
+  always_comb s2_ucode_w  = s1_retain_valid_r ? s1_retain_r : mem_rdata;
+  always_comb s2_valid_w  =   (~rst)
+                            & (   (s2_valid_r & s2_stall)
+                                | (s1_pass & (~s1_stall))
+                              )
+                          ;
 
-      //
-      resp_valid = busy_r & (vector_r != '1);
-      resp_index = encode(first_zero);
-
-    end // block: resp_PROC
-  
   // ======================================================================== //
   //                                                                          //
   // Flops                                                                    //
   //                                                                          //
   // ======================================================================== //
-  
-  // ------------------------------------------------------------------------ //
-  //
-  always_ff @(posedge clk)
-    if (rst)
-      busy_r <= '0;
-    else if (busy_en)
-      busy_r <= busy_w;
-`ifdef HAS_FINAL  
 
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
-    if (rst)
-      final_r <= '0;
-    else
-      final_r <= final_w;
-`endif  
+    if (s1_retain_en)
+      s1_retain_r <= s1_retain_w;
 
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
-    if (rst)
-      done_r <= '0;
-    else
-      done_r <= done_w;
-  
+    s1_retain_valid_r <= s1_retain_valid_w;
+
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
-    if (vector_en)
-      vector_r <= vector_w;
+    begin : valid_reg_PROC
+      s1_valid_r <= s1_valid_w;
+      s2_valid_r <= s2_valid_w;
+    end
 
-endmodule // zero_indices_slow
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (s2_en)
+      s2_ucode_r <= s2_ucode_w;
+
+endmodule // mem_egress_pipe

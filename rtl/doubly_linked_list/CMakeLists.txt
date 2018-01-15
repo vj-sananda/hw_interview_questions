@@ -25,4 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(doubly_linked_list)
+hw_emit_legacy_sysc_answer(tb_doubly_linked_list
+  doubly_linked_list.sv doubly_linked_list.cpp)

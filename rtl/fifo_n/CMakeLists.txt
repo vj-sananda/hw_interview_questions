@@ -25,5 +25,4 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(fifo_n)
-LIBPD_VIVADO(fifo_n)
+hw_emit_legacy_sysc_answer(tb_fifo_n fifo_n.sv fifo_n.cpp)

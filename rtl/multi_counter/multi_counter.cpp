@@ -31,7 +31,7 @@
 #include <sstream>
 #include <algorithm>
 #include <deque>
-#include "Vmulti_counter.h"
+#include "vobj/Vmulti_counter.h"
 
 #define PORTS(__func)                           \
     __func(cntr_pass, bool)                     \

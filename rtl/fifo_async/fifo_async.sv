@@ -74,9 +74,6 @@ module fifo_async #(
 
   localparam ADDR_BITS = $clog2(N);
   localparam PTR_BITS  = ADDR_BITS + 1;
-`define GRAY_W PTR_BITS
-`include "gray.vh"
-`undef GRAY_W
 
   // ======================================================================== //
   //                                                                          //
@@ -153,18 +150,6 @@ module fifo_async #(
 
       //
       rptr_en        = rrst | read_pipe_read_adv;
-
-      //
-      wptr_gray_w    = binary_to_gray(wptr_r);
-
-      //
-      rptr_gray_w    = binary_to_gray(rptr_r);
-
-      //
-      wptr_rsync     = gray_to_binary(wptr_gray_rsync_r);
-
-      //
-      rptr_wsync     = gray_to_binary(rptr_gray_wsync_r);
 
       //
       mem_en0        = (~full_r) & push;
@@ -255,6 +240,22 @@ module fifo_async #(
 
   // ------------------------------------------------------------------------ //
   //
+  gray_encode #(.W(PTR_BITS)) u_enc_wptr (.dec(wptr_r), .gray(wptr_gray_w));
+  
+  // ------------------------------------------------------------------------ //
+  //
+  gray_encode #(.W(PTR_BITS)) u_enc_rptr (.dec(rptr_r), .gray(rptr_gray_w));
+  
+  // ------------------------------------------------------------------------ //
+  //
+  gray_decode #(.W(PTR_BITS)) u_dec_wptr (.gray(wptr_gray_rsync_r), .dec(wptr_rsync));
+  
+  // ------------------------------------------------------------------------ //
+  //
+  gray_decode #(.W(PTR_BITS)) u_dec_rptr (.gray(rptr_gray_wsync_r), .dec(rptr_wsync));
+  
+  // ------------------------------------------------------------------------ //
+  //
   sync_ff #(.W(PTR_BITS)) u_sync_rptr (
     //
       .clk               (wclk               )
@@ -279,25 +280,25 @@ module fifo_async #(
   //
   dpsram #(.W(W), .N(N)) u_mem (
     //
-      .clk1              (wclk               )
+      .clk0              (wclk               )
     //
-    , .en1               (mem_en0            )
-    , .wen1              (1'b1               )
-    , .addr1             (mem_addr0          )
-    , .din1              (push_data          )
-    , .dout1             ()
+    , .en0               (mem_en0            )
+    , .wen0              (1'b1               )
+    , .addr0             (mem_addr0          )
+    , .din0              (push_data          )
+    , .dout0             ()
     //
-    , .clk2              (rclk               )
+    , .clk1              (rclk               )
     //
-    , .en2               (read_pipe_mem_ren  )
-    , .wen2              (1'b0               )
-    , .addr2             (mem_addr1          )
-    , .din2              ('0                 )
-    , .dout2             (read_pipe_mem_rdata)
+    , .en1               (read_pipe_mem_ren  )
+    , .wen1              (1'b0               )
+    , .addr1             (mem_addr1          )
+    , .din1              ('0                 )
+    , .dout1             (read_pipe_mem_rdata)
   );
 
   // ------------------------------------------------------------------------ //
-  //
+  // TODO: deprecate
   mem_egress_pipe #(.W(W)) u_read_pipe (
     //
       .clk               (rclk                 )

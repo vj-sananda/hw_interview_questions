@@ -25,4 +25,4 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(simd)
+hw_emit_legacy_sysc_answer(tb_simd simd.sv simd.cpp)

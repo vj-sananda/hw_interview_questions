@@ -25,5 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(clk_div_by_3)
-LIBPD_VIVADO(clk_div_by_3)
+hw_emit_legacy_sysc_answer(tb_clk_div_by_3
+  clk_div_by_3.sv clk_div_by_3.cpp)

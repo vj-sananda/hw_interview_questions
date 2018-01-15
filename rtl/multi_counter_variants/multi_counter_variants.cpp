@@ -29,7 +29,7 @@
 #include <array>
 #include <deque>
 //
-#include "Vmulti_counter_variants.h"
+#include "vobj/Vmulti_counter_variants.h"
 
 #define PORTS(__func)                           \
     __func(cmd_pass, bool)                      \

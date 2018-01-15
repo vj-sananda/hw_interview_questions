@@ -27,7 +27,7 @@
 
 #include <libtb.h>
 #include <deque>
-#include "Vfused_multiply_add.h"
+#include "vobj/Vfused_multiply_add.h"
 
 #define PORTS(__func)                           \
     __func(cntrl_load, bool)                    \

@@ -29,7 +29,7 @@
 #include <vector>
 #include <algorithm>
 #include <sstream>
-#include "Vmissing_duplicated_word.h"
+#include "vobj/Vmissing_duplicated_word.h"
 
 #define PORTS(__func)                           \
     __func(bool, state_upt)                     \

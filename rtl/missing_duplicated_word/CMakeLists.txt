@@ -25,5 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(missing_duplicated_word)
-#LIBPD_VIVADO(missing_duplicated_word)
+hw_emit_legacy_sysc_answer(tb_missing_duplicated_word
+  missing_duplicated_word.sv missing_duplicated_word.cpp)

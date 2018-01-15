@@ -29,7 +29,7 @@
 #include <deque>
 #include <sstream>
 #include <bitset>
-#include "Vcount_zeros_32.h"
+#include "vobj/Vcount_zeros_32.h"
 
 #define PORTS(__func)                           \
   __func(pass, bool)                            \

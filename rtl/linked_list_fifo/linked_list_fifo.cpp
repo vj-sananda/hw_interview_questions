@@ -29,7 +29,7 @@
 #include <vector>
 #include <deque>
 #include <sstream>
-#include "Vlinked_list_fifo.h"
+#include "vobj/Vlinked_list_fifo.h"
 
 #define PORTS(__func)                           \
   __func(cmd_pass, bool)                        \

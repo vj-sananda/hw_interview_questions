@@ -27,7 +27,7 @@
 
 #include <libtb.h>
 #include <deque>
-#include "Vfifo_async_tb.h"
+#include "vobj/Vfifo_async_tb.h"
 #include "fifo_async_tb_ports.h"
 
 using WordT = vluint32_t;

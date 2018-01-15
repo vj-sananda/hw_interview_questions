@@ -25,4 +25,4 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(count_ones)
+hw_emit_legacy_sysc_answer(tb_count_ones count_ones.sv count_ones.cpp)

@@ -10,3 +10,9 @@
 [submodule "contrib/libpd"]
 	path = contrib/libpd
 	url = https://github.com/stephenry/libpd.git
+[submodule "contrib/libv2"]
+	path = contrib/libv2
+	url = git@github.com:stephenry/libv2.git
+[submodule "contrib/libtb2"]
+	path = contrib/libtb2
+	url = git@github.com:stephenry/libtb2.git

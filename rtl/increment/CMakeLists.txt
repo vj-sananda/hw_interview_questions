@@ -25,4 +25,4 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-EMIT_ANSWER(increment)
+hw_emit_legacy_sysc_answer(tb_increment fast_increment.sv increment.cpp)

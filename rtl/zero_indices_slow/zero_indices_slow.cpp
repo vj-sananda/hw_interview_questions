@@ -30,7 +30,7 @@
 #include <sstream>
 #include <bitset>
 
-#include "Vzero_indices_slow.h"
+#include "vobj/Vzero_indices_slow.h"
 
 #define PORTS(__func)                           \
   __func(in_vector, uint32_t)                   \
