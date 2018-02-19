@@ -25,9 +25,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-#include <libtb.h>
+#include <libtb2.hpp>
 #include <deque>
-#include <vector>
 #include "vobj/Vsimd.h"
 
 #define PORTS(__func)                           \
@@ -38,192 +37,230 @@
   __func(Y_r, uint32_t)                         \
   __func(valid_r, bool)
 
-
-void set16(uint32_t &y, uint32_t a, int i) {
-  uint32_t mask = 0xFFFF << (i * 16);
-  y &= (~mask);
-  y |= (a << (i * 16));
-}
-uint32_t get16(uint32_t y, int i) {
-  return (y >> (16 * i)) & 0xFFFF;
-}
-void set8(uint32_t &y, uint32_t a, int i) {
-  uint32_t mask = 0xFF << (i * 8);
-  y &= (~mask);
-  y |= (a << (i * 8));
-}
-uint32_t get8(uint32_t y, int i) {
-  return (y >> (8 * i)) & 0xFF;
-}
-  
-enum class OpT : uint8_t { OP_SEL0 = 0,
+enum OpT { OP_SEL0 = 0,
     OP_SEL1, OP_ADD32, OP_SUB32, OP_ADD16, OP_SUB16,
     OP_ADD8, OP_SUB8, OP_ADDSUB16, OP_SUBADD16, OP_ADDSUB8,
     OP_SUBADD8
 };
+
+struct SIMDCmd {
+  OpT op;
+  uint32_t A, B;
+};
+
+
+template<>
+struct scv_extensions<OpT> : scv_enum_base<OpT> {
+  SCV_ENUM_CTOR(OpT) {
+    SCV_ENUM(OP_SEL0);
+    SCV_ENUM(OP_SEL1);
+    SCV_ENUM(OP_ADD32);
+    SCV_ENUM(OP_SUB32);
+    SCV_ENUM(OP_ADD16);
+    SCV_ENUM(OP_SUB16);
+    SCV_ENUM(OP_ADD8);
+    SCV_ENUM(OP_SUB8);
+    SCV_ENUM(OP_ADDSUB16);
+    SCV_ENUM(OP_SUBADD16);
+    SCV_ENUM(OP_ADDSUB8);
+    SCV_ENUM(OP_SUBADD8);
+  }
+};
+
+template<>
+struct scv_extensions<SIMDCmd> : scv_extensions_base<SIMDCmd> {
+  scv_extensions<OpT> op;
+  scv_extensions<uint32_t> A, B;
+  SCV_EXTENSIONS_CTOR(SIMDCmd) {
+    SCV_FIELD(op);
+    SCV_FIELD(A);
+    SCV_FIELD(B);
+  }
+};
+
 const char * to_string(const OpT op) {
   switch (op) {
 #define _stringify(OP) case OP: return #OP; break;
-    _stringify(OpT::OP_SEL0)
-    _stringify(OpT::OP_SEL1)
-    _stringify(OpT::OP_ADD32)
-    _stringify(OpT::OP_SUB32)
-    _stringify(OpT::OP_ADD16)
-    _stringify(OpT::OP_SUB16)
-    _stringify(OpT::OP_ADDSUB16)
-    _stringify(OpT::OP_SUBADD16)
-    _stringify(OpT::OP_ADD8)
-    _stringify(OpT::OP_SUB8)
-    _stringify(OpT::OP_ADDSUB8)
-    _stringify(OpT::OP_SUBADD8)
+    _stringify(OP_SEL0)
+    _stringify(OP_SEL1)
+    _stringify(OP_ADD32)
+    _stringify(OP_SUB32)
+    _stringify(OP_ADD16)
+    _stringify(OP_SUB16)
+    _stringify(OP_ADDSUB16)
+    _stringify(OP_SUBADD16)
+    _stringify(OP_ADD8)
+    _stringify(OP_SUB8)
+    _stringify(OP_ADDSUB8)
+    _stringify(OP_SUBADD8)
 #undef _stringify
   }
   return "<Invalid Op>";
 }
 
-using namespace libtb;
-struct SIMDTb : TopLevel
-{
-  static constexpr int T_N = 100000;
-  using UUT = Vsimd;
-  using DataT = uint32_t;
-  struct Expectation {
-    OpT op;
-    DataT A, B, Y;
-  };
-  SC_HAS_PROCESS(SIMDTb);
-  SIMDTb(sc_core::sc_module_name mn = "t")
-    : uut_("uut")
-  {
-    SC_METHOD(m_checker);
-    dont_initialize();
-    sensitive << e_tb_sample();
-    uut_.clk(clk());
-    uut_.rst(rst());
-#define __bind_signal(__name, __type)           \
-    uut_.__name(__name##_);
-    PORTS(__bind_signal)
-#undef __bind_signals
-      }
-  bool run_test () {
-    t_wait_reset_done();
-    int n = T_N;
-    std::vector<OpT> ops{
-      OpT::OP_SEL0, OpT::OP_SEL1, OpT::OP_ADD32, OpT::OP_SUB32,
-      OpT::OP_ADD16, OpT::OP_SUB16, 
-      OpT::OP_ADD8, OpT::OP_SUB8,
-      OpT::OP_ADDSUB16, OpT::OP_SUBADD16,
-      OpT::OP_ADDSUB8, OpT::OP_SUBADD8
-    };
-    while (n--) {
-      pass_ = true;
-      const OpT op = *choose_random(ops.begin(), ops.end());
-      const DataT A = random<DataT>();
-      const DataT B = random<DataT>();
-      op_ = static_cast<uint32_t>(op);
-      A_ = A;
-      B_ = B;
-      const DataT E = compute_expected(op, A, B);
-      expected_.push_back({op, A, B, E});
-      t_wait_posedge_clk();
-      pass_ = false;
-    }
-    LIBTB_REPORT_INFO("Stimulus done");
-    t_wait_posedge_clk(10);
-    return false;
-  }
-  DataT compute_expected(const OpT op, const DataT A, const DataT B) {
-    DataT r{};
-    switch (op) {
-    case OpT::OP_SEL0: {
-      r = A;
+typedef Vsimd uut_t;
+
+struct SIMDEngine {
+  static uint32_t compute(const SIMDCmd & c) {
+    uint32_t r = 0;
+    switch (c.op) {
+    case OP_SEL0: {
+      r = c.A;
     } break;
-    case OpT::OP_SEL1: {
-      r = B;
+    case OP_SEL1: {
+      r = c.B;
     } break;
-    case OpT::OP_ADD32: {
-      r = (A + B);
+    case OP_ADD32: {
+      r = (c.A + c.B);
     } break;
-    case OpT::OP_SUB32: {
-      r = (A - B);
+    case OP_SUB32: {
+      r = (c.A - c.B);
     } break;
-    case OpT::OP_ADD16: {
+    case OP_ADD16: {
       for (int i = 0; i < 2; i++)
-        set16(r, get16(A, i) + get16(B, i), i);
+        set16(r, get16(c.A, i) + get16(c.B, i), i);
     } break;
-    case OpT::OP_ADDSUB16: {
-      set16(r, get16(A, 0) - get16(B, 0), 0);
-      set16(r, get16(A, 1) + get16(B, 1), 1);
+    case OP_ADDSUB16: {
+      set16(r, get16(c.A, 0) - get16(c.B, 0), 0);
+      set16(r, get16(c.A, 1) + get16(c.B, 1), 1);
     } break;
-    case OpT::OP_SUBADD16: {
-      set16(r, get16(A, 0) + get16(B, 0), 0);
-      set16(r, get16(A, 1) - get16(B, 1), 1);
+    case OP_SUBADD16: {
+      set16(r, get16(c.A, 0) + get16(c.B, 0), 0);
+      set16(r, get16(c.A, 1) - get16(c.B, 1), 1);
     } break;
-    case OpT::OP_ADD8: {
+    case OP_ADD8: {
       for (int i = 0; i < 4; i++)
-        set8(r, get8(A, i) + get8(B, i), i);
+        set8(r, get8(c.A, i) + get8(c.B, i), i);
     } break;
-    case OpT::OP_ADDSUB8: {
-      set8(r, get8(A, 0) - get8(B, 0), 0);
-      set8(r, get8(A, 1) + get8(B, 1), 1);
-      set8(r, get8(A, 2) - get8(B, 2), 2);
-      set8(r, get8(A, 3) + get8(B, 3), 3);
+    case OP_ADDSUB8: {
+      set8(r, get8(c.A, 0) - get8(c.B, 0), 0);
+      set8(r, get8(c.A, 1) + get8(c.B, 1), 1);
+      set8(r, get8(c.A, 2) - get8(c.B, 2), 2);
+      set8(r, get8(c.A, 3) + get8(c.B, 3), 3);
     } break;
-    case OpT::OP_SUBADD8: {
-      set8(r, get8(A, 0) + get8(B, 0), 0);
-      set8(r, get8(A, 1) - get8(B, 1), 1);
-      set8(r, get8(A, 2) + get8(B, 2), 2);
-      set8(r, get8(A, 3) - get8(B, 3), 3);
+    case OP_SUBADD8: {
+      set8(r, get8(c.A, 0) + get8(c.B, 0), 0);
+      set8(r, get8(c.A, 1) - get8(c.B, 1), 1);
+      set8(r, get8(c.A, 2) + get8(c.B, 2), 2);
+      set8(r, get8(c.A, 3) - get8(c.B, 3), 3);
     } break;
-    case OpT::OP_SUB16: {
+    case OP_SUB16: {
       for (int i = 0; i < 2; i++)
-        set16(r, get16(A, i) - get16(B, i), i);
+        set16(r, get16(c.A, i) - get16(c.B, i), i);
     } break;
-    case OpT::OP_SUB8: {
+    case OP_SUB8: {
       for (int i = 0; i < 4; i++)
-        set8(r, get8(A, i) - get8(B, i), i);
+        set8(r, get8(c.A, i) - get8(c.B, i), i);
     } break;
     }
     return r;
   }
+private:
+
+  static void set16(uint32_t &y, uint32_t a, int i) {
+    uint32_t mask = 0xFFFF << (i * 16);
+    y &= (~mask);
+    y |= (a << (i * 16));
+  }
+  static uint32_t get16(uint32_t y, int i) {
+    return (y >> (16 * i)) & 0xFFFF;
+  }
+  static void set8(uint32_t &y, uint32_t a, int i) {
+    uint32_t mask = 0xFF << (i * 8);
+    y &= (~mask);
+    y |= (a << (i * 8));
+  }
+  static uint32_t get8(uint32_t y, int i) {
+    return (y >> (8 * i)) & 0xFF;
+  }
+};
+
+struct SimdTb : libtb2::Top<SimdTb> {
+  SC_HAS_PROCESS(SimdTb);
+  SimdTb(sc_core::sc_module_name mn = "t")
+    : uut_("uut") {
+
+    //
+    resetter_.clk(clk_);
+    resetter_.rst(rst_);
+    //
+    sampler_.clk(clk_);
+    //
+    wd_.clk(clk_);
+    //
+    uut_.clk(clk_);
+    uut_.rst(rst_);
+#define __bind_ports(__name, __type)            \
+    uut_.__name(__name ## _);
+    PORTS(__bind_ports)
+#undef __bind_ports
+
+    SC_THREAD(t_stimulus);
+    SC_METHOD(m_checker);
+    sensitive << sampler_.sample();
+    dont_initialize();
+
+    st_.reset();
+  }
+  void end_of_simulation() {
+    LOGGER(INFO) << "Transaction count = " << st_.n << "\n";
+  }
+private:
   void m_checker() {
     if (valid_r_) {
-      if (expected_.size() == 0)
-        LIBTB_REPORT_ERROR("Unexpected response");
+      const uint32_t expected = expected_.front(); expected_.pop_front();
+      const uint32_t actual = Y_r_;
 
-      const DataT actual = Y_r_;
-      const Expectation expected = expected_.front();
-      expected_.pop_front();
-
-      if (actual != expected.Y) {
-        std::stringstream ss;
-        ss << "Mismatch: {" << std::hex
-           << "A=" << expected.A << ",B=" << expected.B
-           << ",op=" << to_string(expected.op) << ","
-           << "Y (actual) =" << actual << ","
-           << "Y (expected) =" << expected.Y << "}"
-          ;
-        LIBTB_REPORT_ERROR(ss.str());
-      } else {
-        std::stringstream ss;
-        ss << "Validated: {"
-           << "OP=" << to_string(expected.op) << ","
-           << "A=" << expected.A << ","
-           << "B=" << expected.B << ","
-           << "Y=" << expected.Y << "}";
-        LIBTB_REPORT_INFO(ss.str());
-      }
+      LOGGER(INFO) << " Expected = " << expected
+                   << " Actual = " << actual
+                   << "\n";
+      LIBTB2_ERROR_ON(expected != actual);
     }
   }
-  std::deque<Expectation> expected_;
+  void t_stimulus() {
+    wait(resetter_.done());
+
+    scv_smart_ptr<SIMDCmd> cmd;
+    
+    scv_bag<OpT> opts;
+    for (int op = OP_SEL0; op != OP_SUBADD8; op++)
+      opts.add(static_cast<OpT>(op), 10);
+
+    cmd->op.set_mode(opts);
+
+    while (true) {
+      cmd->next();
+
+      // Send to RTL
+      pass_ = true; op_ = cmd->op; A_ = cmd->A; B_ = cmd->B;
+      expected_.push_back(SIMDEngine::compute(*cmd));
+
+      st_.n++;
+      wait(clk_.posedge_event());
+    }
+  }
+  struct {
+    void reset() {
+      n = 0;
+    }
+    std::size_t n;
+  } st_;
+  std::deque<uint32_t> expected_;
+  sc_core::sc_clock clk_;
+  sc_core::sc_signal<bool> rst_;
 #define __declare_signal(__name, __type)        \
   sc_core::sc_signal<__type> __name##_;
   PORTS(__declare_signal)
 #undef __declare_signal
-  UUT uut_;
+  libtb2::Resetter resetter_;
+  libtb2::Sampler sampler_;
+  libtb2::SimWatchDogCycles wd_;
+  uut_t uut_;
 };
 
-int sc_main(int argc, char **argv)
-{
-  return libtb::LibTbSim<SIMDTb>(argc, argv).start();
+SC_MODULE_EXPORT(SimdTb);
+
+int sc_main(int argc, char **argv) {
+  SimdTb tb;
+  return libtb2::Sim::start(argc, argv);
 }

@@ -136,6 +136,7 @@ private:
   libtb2::ConstantDelayPipe<bool> dp_;
   uut_t uut_;
 };
+SC_MODULE_EXPORT(LatencyTb<uint32_t>);
 
 int sc_main(int argc, char **argv) {
   LatencyTb<uint32_t> tb;
