@@ -73,8 +73,7 @@ struct IncrementTb : libtb2::Top<IncrementTb<T> > {
 };
 SC_MODULE_EXPORT(IncrementTb<uint32_t>);
 
-int sc_main(int argc, char **argv)
-{
+int sc_main(int argc, char **argv) {
   IncrementTb<uint32_t> tb;
   return libtb2::Sim::start(argc, argv);
 }

@@ -25,101 +25,98 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-#include <libtb.h>
+#include <libtb2.hpp>
 #include <deque>
-#include <sstream>
-#include <bitset>
 #include "vobj/Vcount_zeros_32.h"
 
 #define PORTS(__func)                           \
   __func(pass, bool)                            \
-  __func(x, uint32_t)                           \
+  __func(x, T)                                  \
   __func(valid_r, bool)                         \
-  __func(y, uint32_t)
+  __func(y, T)
 
-struct CountZeros32Tb : libtb::TopLevel
-{
-  using UUT = Vcount_zeros_32;
+typedef Vcount_zeros_32 uut_t;
+
+template<typename T>
+struct CountZeros32Tb : libtb2::Top<T> {
   SC_HAS_PROCESS(CountZeros32Tb);
-  CountZeros32Tb(sc_core::sc_module_name mn = "t")
-    : uut_("uut")
-#define __construct_signal(__name, __type)      \
-      , __name##_(#__name)
-      PORTS(__construct_signal)
-#undef __construct_signal
-  {
+  CountZeros32Tb(sc_module_name mn = "t")
+    : uut_("uut") {
+    //
+    uut_.clk(clk_);
+    uut_.rst(rst_);
+#define __bind_ports(__name, __type)            \
+    uut_.__name(__name ## _);
+    PORTS(__bind_ports)
+#undef __bind_ports
+    //
+    resetter_.clk(clk_);
+    resetter_.rst(rst_);
+    //
+    sampler_.clk(clk_);
+    //
+    wd_.clk(clk_);
+    //
+    SC_THREAD(t_stimulus);
+    //
     SC_METHOD(m_checker);
-    dont_initialize();
-    sensitive << e_tb_sample();
-
-    uut_.clk(clk());
-    uut_.rst(rst());
-#define __bind_signal(__name, __type)           \
-    uut_.__name(__name##_);
-    PORTS(__bind_signal)
-#undef __bind_signals
+    this->sensitive << sampler_.sample();
+    this->dont_initialize();
+    //
+    st_.reset();
   }
-  bool run_test()
-  {
-    t_wait_reset_done();
-    LIBTB_REPORT_INFO("Stimulus starts...");
+  void end_of_simulation() {
+    LOGGER(INFO) << "Samples processed=" << st_.n << "\n";
+  }
+private:
+  void m_checker() {
+    const libtb2::Options & o = libtb2::Sim::get_options();
 
-    int n = 10000;
-    while (n--) {
+    if (!valid_r_)
+      return ;
+
+    const T d = d_.front(); d_.pop_front();
+    const std::size_t zeros = libtb2::popcount(~d);
+    LIBTB2_ERROR_ON(zeros != y_);
+
+    if (o.debug_on()) {
+      LOGGER(DEBUG) << "x = " << x_
+                    << " actual = " << y_
+                    << " expected = " << zeros
+                    << "\n";
+    }
+  }
+  void t_stimulus() {
+    wait(resetter_.done());
+
+    scv_smart_ptr<T> p;
+    while (true) {
+      p->next();
+
       pass_ = true;
-      const uint32_t x = libtb::random<uint32_t>();
-      const uint32_t cnt = std::bitset<32>(x).flip().count();
-      x_ = x;
-      std::stringstream ss;
-      ss << "Validating bitmap: " << std::bitset<32>(x).to_string()
-         << "  (ZERO=" << cnt << ")"
-        ;
-      LIBTB_REPORT_DEBUG(ss.str());
-      t_wait_posedge_clk();
-      expected_.push_back(cnt);
-    }
-    pass_ = false;
-
-    t_wait_posedge_clk(10);
-    LIBTB_REPORT_INFO("Stimulus ends..");
-    return false;
-  }
-
-  void m_checker()
-  {
-    if (valid_r_) {
-      if (expected_.size() == 0) {
-        std::stringstream ss;
-        ss << "Unexpected result";
-        LIBTB_REPORT_ERROR(ss.str());
-        return;
-      }
-
-      const uint32_t actual = y_;
-      const uint32_t expected = expected_.front(); expected_.pop_front();
-      if (actual != expected) {
-        std::stringstream ss;
-        ss << "Mismatch detected: "
-           << " Actual: " << actual
-           << " Expected: " << expected;
-        LIBTB_REPORT_ERROR(ss.str());
-      } else {
-        std::stringstream ss;
-        ss << "Validated cnt=" << actual;
-        LIBTB_REPORT_DEBUG(ss.str());
-      }
+      x_ = *p;
+      d_.push_back(*p);
+      wait(clk_.posedge_event());
     }
   }
-  std::deque<uint32_t> expected_;
-#define __declare_signal(__name, __type)        \
-  sc_core::sc_signal<__type> __name##_;
-  PORTS(__declare_signal)
-#undef __declare_signal
-  UUT uut_;
+  struct {
+    void reset() { n = 0; }
+    std::size_t n;
+  } st_;
+  sc_core::sc_clock clk_;
+  sc_core::sc_signal<bool> rst_;
+#define __declare_signals(__name, __type)       \
+  sc_core::sc_signal<__type> __name ## _;
+  PORTS(__declare_signals)
+#undef __declare_signals
+  libtb2::Resetter resetter_;
+  libtb2::Sampler sampler_;
+  libtb2::SimWatchDogCycles wd_;
+  std::deque<T> d_;
+  uut_t uut_;
 };
 
-int sc_main(int argc, char **argv)
-{
-  using namespace libtb;
-  return LibTbSim<CountZeros32Tb>(argc, argv).start();
+int sc_main(int argc, char **argv) {
+  CountZeros32Tb<uint32_t> tb;
+  return libtb2::Sim::start(argc, argv);
 }

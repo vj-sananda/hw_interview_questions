@@ -25,58 +25,55 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-#include <libtb.h>
+#include <libtb2.hpp>
 #include "vobj/Vcount_ones.h"
 
 #define PORTS(__func)                           \
-    __func(A, WordT)                            \
-    __func(fail, bool)
+  __func(A, T)                                  \
+  __func(fail, bool)
 
-const int TB_N = 10000;
+typedef Vcount_ones uut_t;
 
-struct CountOnesTb : libtb::TopLevel
-{
-    using WordT = uint32_t;
-    SC_HAS_PROCESS(CountOnesTb);
-    CountOnesTb(sc_core::sc_module_name mn = "t")
-        : uut_("uut")
-    {
-        SC_METHOD(m_checker);
-        sensitive << e_tb_sample();
-        dont_initialize();
-
+template<typename T>
+struct CountOnesTb : libtb2::Top<CountOnesTb<T> > {
+  SC_HAS_PROCESS(CountOnesTb);
+  CountOnesTb(sc_core::sc_module_name mn = "t")
+      : uut_("uut") {
 #define __bind_ports(__name, __type)            \
-        uut_.__name(__name##_);
-        PORTS(__bind_ports)
+    uut_.__name(__name ## _);
+    PORTS(__bind_ports)
 #undef __bind_ports
+    wd_.clk(clk_);
+
+    SC_METHOD(m_fail);
+    this->sensitive << fail_.posedge_event();
+    this->dont_initialize();
+    
+    SC_THREAD(t_stimulus);
+  }
+ private:
+  void m_fail() { LIBTB2_ERROR_ON(fail_); }
+  void t_stimulus() {
+    scv_smart_ptr<T> p;
+    while (true) {
+      wait(clk_.posedge_event());
+      p->next();
+      A_ = *p;
+
+      LOGGER(INFO) << "A=" << A_ << "\n";
     }
-
-    bool run_test() {
-
-        A_ = 0;
-        t_wait_reset_done();
-
-        for (int i = 0; i < TB_N; i++) {
-            A_ = libtb::random<WordT>();
-            t_wait_posedge_clk();
-        }
-        return false;
-    }
-
-    void m_checker() {
-        LIBTB_ASSERT_ERROR(!fail_);
-    }
-
+  }
+  sc_core::sc_clock clk_;
 #define __declare_signals(__name, __type)       \
-    sc_core::sc_signal<__type> __name##_;
-    PORTS(__declare_signals)
+  sc_core::sc_signal<__type> __name ## _;
+  PORTS(__declare_signals)
 #undef __declare_signals
-    Vcount_ones uut_;
+  libtb2::SimWatchDogCycles wd_;
+  uut_t uut_;
 };
+SC_MODULE_EXPORT(CountOnesTb<uint32_t>);
 
-
-int sc_main(int argc, char **argv)
-{
-    using namespace libtb;
-    return LibTbSim<CountOnesTb>(argc, argv).start();
+int sc_main(int argc, char **argv) {
+  CountOnesTb<uint32_t> tb;
+  return libtb2::Sim::start(argc, argv);
 }

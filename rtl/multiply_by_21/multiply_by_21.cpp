@@ -25,62 +25,55 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-#include <libtb.h>
-#include <sstream>
+#include <libtb2.hpp>
 #include "vobj/Vmultiply_by_21.h"
 
-using DataT = uint32_t;
-
 #define PORTS(__func)                           \
-  __func(a, DataT)                              \
+  __func(a, T)                                  \
   __func(fail, bool)
 
-struct MultiplyBy21Tb : libtb::TopLevel
-{
+typedef Vmultiply_by_21 uut_t;
+
+template<typename T>
+struct MultiplyBy21Tb : libtb2::Top<MultiplyBy21Tb<T> > {
   SC_HAS_PROCESS(MultiplyBy21Tb);
   MultiplyBy21Tb(sc_core::sc_module_name mn = "t")
-    : libtb::TopLevel(mn)
-    , uut_("uut")
-#define __construct_signals(__name, __type)     \
-    , __name##_(#__name)
-    PORTS(__construct_signals)
-#undef __construct_signals
-  {
-    SC_METHOD(m_checker);
-    sensitive << e_tb_sample();
-    dont_initialize();
+      : uut_("uut") {
+#define __bind_ports(__name, __type)            \
+    uut_.__name(__name ## _);
+    PORTS(__bind_ports)
+#undef __bind_ports
+    wd_.clk(clk_);
 
-#define __bind_signals(__name, __type)          \
-    uut_.__name(__name##_);
-    PORTS(__bind_signals)
-#undef __bind_signals
+    SC_METHOD(m_fail);
+    this->sensitive << fail_.posedge_event();
+    this->dont_initialize();
+    
+    SC_THREAD(t_stimulus);
   }
+ private:
+  void m_fail() { LIBTB2_ERROR_ON(fail_); }
+  void t_stimulus() {
+    scv_smart_ptr<T> p;
+    while (true) {
+      wait(clk_.posedge_event());
+      p->next();
+      a_ = *p;
 
-  bool run_test() {
-    LIBTB_REPORT_INFO("Stimulus starts");
-    int n = N_;
-    while (n--) {
-      a_ = libtb::random<DataT>();
-      wait(10, SC_NS);
+      LOGGER(INFO) << "a=" << a_ << "\n";
     }
-    LIBTB_REPORT_INFO("Stimulus ends");
-    return false;
   }
-
-  void m_checker()
-  {
-    LIBTB_ASSERT_FATAL(!fail_);
-  }
-
-  const int N_{10000};
+  sc_core::sc_clock clk_;
 #define __declare_signals(__name, __type)       \
-  sc_core::sc_signal<__type> __name##_;
+  sc_core::sc_signal<__type> __name ## _;
   PORTS(__declare_signals)
 #undef __declare_signals
-  Vmultiply_by_21 uut_;
+  libtb2::SimWatchDogCycles wd_;
+  uut_t uut_;
 };
+SC_MODULE_EXPORT(MultiplyBy21Tb<uint32_t>);
 
-int sc_main (int argc, char **argv)
-{
-  return libtb::LibTbSim<MultiplyBy21Tb>(argc, argv).start();
+int sc_main(int argc, char **argv) {
+  MultiplyBy21Tb<uint32_t> tb;
+  return libtb2::Sim::start(argc, argv);
 }

@@ -25,6 +25,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
+`include "libtb2.vh"
+
 module count_zeros (
 
    //======================================================================== //
@@ -54,6 +56,7 @@ module count_zeros (
    , output logic                            valid_r
    , output logic   [$clog2(32):0]           y
 );
+`include "libtb2_bdy.vh"
 
   typedef logic [31:0] w_t;
   typedef logic [3:0]  nibble_t;
