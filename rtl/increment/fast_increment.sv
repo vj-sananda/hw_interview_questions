@@ -25,8 +25,10 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-module increment #(parameter int W = 32) (input [W-1:0] A, output logic fail);
+`include "libtb2.vh"
 
+module increment #(parameter int W = 32) (input [W-1:0] A, output logic fail);
+  
   typedef logic [W-1:0] w_t;
 
   //
@@ -75,6 +77,6 @@ module increment #(parameter int W = 32) (input [W-1:0] A, output logic fail);
     end // block: increment_PROC
 
   //
-  always_comb fail = (y_naive != y_optimal);
+  always_comb fail  = (y_naive != y_optimal);
 
 endmodule // increment
