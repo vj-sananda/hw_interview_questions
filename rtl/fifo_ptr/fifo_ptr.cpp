@@ -25,9 +25,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-#include <libtb.h>
+#include <libtb2.hpp>
 #include <deque>
-#include <sstream>
 #include "vobj/Vfifo_ptr.h"
 
 #define FIFO_PORTS(__func)                      \
@@ -41,99 +40,203 @@
     __func(empty_r, bool)                       \
     __func(full_r, bool)
 
-template <typename T = vluint32_t>
-struct FifoTb : public libtb::TopLevel {
-  FifoTb() : libtb::TopLevel("t"), uut_("uut") {
-    bind_rtl();
-//    wave_on("foo.vcd", uut_);
-  }
-  virtual ~FifoTb() {}
+typedef Vfifo_ptr uut_t;
 
- protected:
-  void bind_rtl() {
-    uut_.clk(clk());
-    uut_.rst(rst());
-#define __connect_ports(__name, __type) uut_.__name(__name##_);
-    FIFO_PORTS(__connect_ports)
-#undef __connect_ports
+template<typename T>
+struct PushIntf : sc_core::sc_interface {
+  virtual void idle() = 0;
+  virtual void bpush(const T & t) = 0;
+  virtual bool is_full() const = 0;
+};
+
+template<typename T>
+struct PopIntf : sc_core::sc_interface {
+  virtual void idle() = 0;
+  virtual T bpop() = 0;
+  virtual bool is_empty() const = 0;
+};
+
+template<typename T>
+struct PushXactor : sc_core::sc_module, PushIntf<T> {
+  sc_core::sc_in<bool> clk;
+
+  sc_core::sc_in<bool> full_r;
+
+  sc_core::sc_out<bool> push;
+  sc_core::sc_out<T> push_data;
+  
+  SC_HAS_PROCESS(PushXactor);
+  PushXactor(libtb2::Sampler & s, sc_core::sc_module_name mn = "pushxactor")
+      : s_(s), full_r("full_r"), push("push"), push_data("push_data") {
+  }
+  void idle() {
+    push = false;
+    push_data = T();
+  }
+  void bpush(const T & t) {
+    while (full_r)
+      wait(clk.posedge_event());
+
+    push = true;
+    push_data = t;
+    wait(clk.posedge_event());
+    idle();
+  }
+  bool is_full() const { return full_r; }
+ private:
+  libtb2::Sampler & s_;
+};
+
+template<typename T>
+struct PopXactor : sc_core::sc_module, PopIntf<T> {
+  sc_core::sc_in<bool> clk;
+
+  sc_core::sc_in<bool> empty_r;
+  
+  sc_core::sc_out<bool> pop;
+  sc_core::sc_in<T> pop_data;
+  
+  SC_HAS_PROCESS(PopXactor);
+  PopXactor(libtb2::Sampler & s, sc_core::sc_module_name mn = "popxactor")
+      : s_(s), empty_r("empty_r"), pop("pop"), pop_data("pop_data") {
+  }
+  void idle() {
+    pop = false;
+  }
+  T bpop() {
+    while (empty_r)
+      wait(empty_r.posedge_event());
+
+    wait(s_.sample());
+    const T t = pop_data;
+    pop = true;
+    wait(clk.posedge_event());
+    idle();
+    return t;
+  }
+  bool is_empty() const { return empty_r; }
+ private:
+  libtb2::Sampler & s_;
+ };
+
+template<typename T>
+struct FifoPtrTb : libtb2::Top<FifoPtrTb<T> > {
+  typedef T value_type;
+
+  sc_core::sc_port<PushIntf<T> > push_intf_;
+  sc_core::sc_port<PopIntf<T> > pop_intf_;
+  
+  SC_HAS_PROCESS(FifoPtrTb);
+  FifoPtrTb(sc_core::sc_module_name mn = "t")
+      : uut_("uut")
+      , x_push_(sampler_, "PushXactor")
+      , x_pop_(sampler_, "PopXactor") {
+    //
+    x_push_.clk(clk_);
+    x_push_.full_r(full_r_);
+    x_push_.push(push_);
+    x_push_.push_data(push_data_);
+    
+    push_intf_.bind(x_push_);
+
+    //
+    x_pop_.clk(clk_);
+    x_pop_.empty_r(empty_r_);
+    x_pop_.pop(pop_);
+    x_pop_.pop_data(pop_data_);
+    
+    pop_intf_.bind(x_pop_);
+
+    //
+    wd_.clk(clk_);
+
+    //
+    resetter_.clk(clk_);
+    resetter_.rst(rst_);
+
+    //
+    sampler_.clk(clk_);
+
+    //
+#define __bind_ports(__name, __type)            \
+    uut_.__name(__name ## _);
+    FIFO_PORTS(__bind_ports)
+#undef __bind_ports
+    uut_.rst(rst_);
+    uut_.clk(clk_);
+
+    SC_THREAD(t_push);
+    SC_THREAD(t_pop);
+
+    st_.reset();
+  }
+ private:
+  void t_push() {
+    scv_smart_ptr<T> d;
+
+    wait(resetter_.done());
+    while (true) {
+      if (!push_intf_->is_full()) {
+        d->next();
+        push_intf_->bpush(*d);
+        expected_.push_back(*d);
+        st_.pushes++;
+      } else {
+        wait(clk_.posedge_event());
+      }
+    }
+  }
+  void t_pop() {
+    const libtb2::Options & o = libtb2::Sim::get_options();
+
+    wait(resetter_.done());
+    while (true) {
+      if (!pop_intf_->is_empty()) {
+        LIBTB2_ASSERT(!expected_.empty());
+        
+        const T actual = pop_intf_->bpop();
+        const T expected = expected_.front(); expected_.pop_front();
+        st_.pops++;
+      
+        LIBTB2_ERROR_ON(actual != expected);
+        if (o.debug_on()) {
+          LOGGER(DEBUG) << " Actual=" << actual
+                        << " Expected=" << expected << "\n";
+        }
+      } else {
+        wait(clk_.posedge_event());
+      }
+    }
+  }
+  void end_of_simulation() {
+    LOGGER(INFO) << "Pushes: " << st_.pushes << "\n";
+    LOGGER(INFO) << "Pops: " << st_.pops << "\n";
   }
 
-  void idle_push() {
-    push_ = 0;
-    push_data_ = T{};
-  }
-  void idle_pop() { pop_ = 0; }
-  void idle_cntrl() { commit_ = false; replay_ = false; }
-  void b_push(const T& d) {
-    idle_push();
-    do {
-      t_wait_sync();
-    } while (full_r_);
-    push_ = true;
-    push_data_ = d;
-    t_wait_posedge_clk();
-    idle_push();
-  }
-
-  T b_pop() {
-    idle_pop();
-    do {
-      t_wait_sync();
-    } while (empty_r_);
-    pop_ = true;;
-    commit_ = true;
-    t_wait_posedge_clk();
-    const T ret = pop_data_;
-    idle_pop();
-    return ret;
-  }
-  Vfifo_ptr uut_;
-
-#define __declare_signals(__name, __type) sc_core::sc_signal<__type> __name##_;
+  struct {
+    void reset() {
+      pushes = 0;
+      pops = 0;
+    }
+    std::size_t pushes, pops;
+  } st_;
+  sc_core::sc_clock clk_;
+  sc_core::sc_signal<bool> rst_;
+  uut_t uut_;
+  PushXactor<T> x_push_;
+  PopXactor<T> x_pop_;
+#define __declare_signals(__name, __type)       \
+  sc_core::sc_signal<__type> __name ## _;
   FIFO_PORTS(__declare_signals)
 #undef __declare_signals
+  libtb2::Resetter resetter_;
+  libtb2::SimWatchDogCycles wd_;
+  libtb2::Sampler sampler_;
+  std::deque<T> expected_;
 };
-
-template <typename T = vluint32_t>
-struct test_0 : public FifoTb<T> {
-  SC_HAS_PROCESS(test_0);
-  test_0() : N_(10000) { SC_THREAD(t_pop); }
-
-  bool run_test() {
-    LIBTB_REPORT_INFO("Test START");
-    while (N_--) {
-      const T t = libtb::random<T>();
-      this->b_push(t);
-      beh_model_.push_back(t);
-    }
-    LIBTB_REPORT_INFO("Test END");
-    return true;
-  }
-
-  void t_pop() {
-    while (true) {
-      const T actual = this->b_pop();
-      const T expected = beh_model_.front();
-      beh_model_.pop_front();
-
-      std::stringstream ss;
-      ss << "Expected " << std::hex << expected << " Actual " << std::hex
-         << actual;
-
-      if (actual != expected)
-        LIBTB_REPORT_ERROR(ss.str());
-      else
-        LIBTB_REPORT_DEBUG(ss.str());
-    }
-  }
-
-  int N_;
-  std::deque<T> beh_model_;
-};
+SC_MODULE_EXPORT(FifoPtrTb<int>);
 
 int sc_main(int argc, char **argv) {
-  using namespace libtb;
-  test_0<> t;
-  LibTbContext::init(argc, argv);
-  return LibTbContext::start();
+  FifoPtrTb<uint32_t> tb;
+  return libtb2::Sim::start(argc, argv);
 }

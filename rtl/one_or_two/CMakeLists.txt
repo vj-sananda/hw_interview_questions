@@ -25,4 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-hw_emit_legacy_sysc_answer(tb_one_to_two one_or_two.sv one_or_two.cpp)
+emit_answer(tb_one_or_two one_or_two.sv one_or_two.cpp)
+add_test(NAME tb_one_or_two COMMAND tb_one_or_two)

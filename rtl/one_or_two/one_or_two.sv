@@ -25,6 +25,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
+`include "libtb2.vh"
+
 module one_or_two #(parameter int W = 32) (
 
  //========================================================================== //
@@ -55,6 +57,7 @@ module one_or_two #(parameter int W = 32) (
 
  , output logic has_set_more_than_1
 );
+  `include "libtb2_bdy.vh"
 
   // ======================================================================== //
   //                                                                          //
