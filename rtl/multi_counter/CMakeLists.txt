@@ -25,4 +25,4 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-hw_emit_legacy_sysc_answer(tb_multi_counter multi_counter.sv multi_counter.cpp)
+emit_answer(tb_multi_counter multi_counter.sv multi_counter.cpp)

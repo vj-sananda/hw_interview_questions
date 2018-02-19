@@ -25,188 +25,239 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-#include <libtb.h>
-#include <vector>
-#include <array>
-#include <sstream>
-#include <algorithm>
+#include <libtb2.hpp>
+#include <map>
 #include <deque>
+#include <utility>
 #include "vobj/Vmulti_counter.h"
+typedef Vmulti_counter uut_t;
 
 #define PORTS(__func)                           \
-    __func(cntr_pass, bool)                     \
-    __func(cntr_id, IdT)                        \
-    __func(cntr_op, OpT)                        \
-    __func(cntr_dat, DatT)                      \
-    __func(status_pass_r, bool)                 \
-    __func(status_qry_r, bool)                  \
-    __func(status_id_r, IdT)                    \
-    __func(status_dat_r, DatT)
+  __func(cntr_pass, bool)                       \
+  __func(cntr_id, uint32_t)                     \
+  __func(cntr_op, uint32_t)                     \
+  __func(cntr_dat, uint32_t)                    \
+  __func(status_pass_r, bool)                   \
+  __func(status_qry_r, bool)                    \
+  __func(status_id_r, uint32_t)                 \
+  __func(status_dat_r, uint32_t)
 
-using IdT = uint32_t;
-using OpT = uint32_t;
-using DatT = uint32_t;
-
-constexpr int OPT_CNTRS_N = 256;
-constexpr int OPT_CNTRS_W = 32;
-
-//
-constexpr OpT OP_NOP  = 0x00;
-constexpr OpT OP_INIT = 0x04;
-constexpr OpT OP_INC  = 0x0C;
-constexpr OpT OP_DEC  = 0x0D;
-constexpr OpT OP_QRY  = 0x18;
-
-std::string OpT_to_string(OpT op)
-{
-    switch (op)
-    {
-    case OP_NOP: return "NOP";
-    case OP_INIT: return "INIT";
-    case OP_INC: return "INC";
-    case OP_DEC: return "DEC";
-    case OP_QRY: return "QRY";
-    }
-    return "INVALID";
+enum OP { OP_NOP = 0x0,
+          OP_INIT = 0x04,
+          OP_INC = 0x0C,
+          OP_DEC = 0x0D,
+          OP_QRY = 0x18 };
+const char * to_string(OP op) {
+  switch (op) {
+    case OP_INIT: return "OP_INIT";
+    case OP_INC: return "OP_INC";
+    case OP_DEC: return "OP_DEC";
+    case OP_QRY: return "OP_QRY";
+    case OP_NOP:
+    default: return "OP_NOP";
+  }
 }
 
-static std::vector<OpT> CMDS{OP_INC, OP_DEC, OP_QRY};
+namespace {
 
-//
-class MultiCounterTb : libtb::TopLevel
-{
-    typedef Vmulti_counter UUT_t;
-public:
+const std::size_t CNTRS_N = 256;
 
-    SC_HAS_PROCESS(MultiCounterTb);
-    MultiCounterTb(sc_core::sc_module_name mn = "t")
-        : uut_("uut")
-#define __construct_signals(__name, __type)     \
-          , __name##_(#__name)
-          PORTS(__construct_signals)
-#undef __construct_signals
-    {
-        wave_on("foo.vcd", uut_);
-        uut_.clk(clk());
-        uut_.rst(rst());
-#define __bind_signals(__name, __type)          \
-        uut_.__name(__name##_);
-        PORTS(__bind_signals)
-#undef __bind_signals
+} // namespace 
 
-        SC_METHOD(m_checker);
-        sensitive << e_tb_sample();
-
-        std::fill_n(std::begin(expected_), OPT_CNTRS_N, DatT());
-    }
-
-private:
-
-    bool run_test() {
-        LIBTB_REPORT_INFO("Starting stimulus");
-
-        LIBTB_REPORT_INFO("Initializing state");
-        for (int i = 0; i < OPT_CNTRS_N; i++)
-            b_issue_command(i, OP_INIT, libtb::random<DatT>());
-
-        LIBTB_REPORT_INFO("Applying random stimulus");
-        for (int i = 0; i < N_; i++)
-            b_issue_command(
-                libtb::random_integer_in_range(OPT_CNTRS_W-1),
-                *libtb::choose_random(CMDS)
-                );
-
-        LIBTB_REPORT_INFO("Checking state");
-        for (int i = 0; i < OPT_CNTRS_N; i++)
-            b_issue_command(i, OP_QRY, 0);
-
-        LIBTB_REPORT_INFO("Stimulus ends");
-        return false;
-    }
-
-    void b_issue_idle() {
-        cntr_pass_ = false;
-        cntr_id_ = IdT();
-        cntr_op_ = OpT();
-        cntr_dat_ = DatT();
-    }
-
-    void b_issue_command(
-        const IdT & id, const OpT & op, const DatT & dat = DatT()) {
-        cntr_pass_ = true;
-        cntr_id_ = id;
-        cntr_op_ = op;
-        cntr_dat_ = dat;
-        t_wait_posedge_clk();
-        {
-            std::stringstream ss;
-            ss << "Issue command:"
-                << "{"
-                << "ID=" << id << ","
-                << "OP=" << OpT_to_string(op) << ","
-                << "DAT=" << dat
-                << "}";
-           LIBTB_REPORT_DEBUG(ss.str());
-        }
-        switch (op) {
-        case OP_INIT:
-            expected_[id] = dat;
-            break;
-        case OP_INC:
-            ++expected_[id];
-            break;
-        case OP_DEC:
-            --expected_[id];
-            break;
-        }
-        queue_.push_back(expected_[id]);
-        b_issue_idle();
-    }
-
-    void m_checker() {
-        if (status_pass_r_) {
-
-            const DatT expected = queue_.front();
-            queue_.pop_front();
-
-            if (!status_qry_r_)
-                return;
-
-            const IdT id = status_id_r_;
-            const DatT actual = status_dat_r_;
-
-            std::stringstream ss;
-            if (actual != expected) {
-                ss << "Mismatch"
-                   << " ID=" << id
-                   << " EXPECTED=" << expected
-                   << " ACTUAL=" << actual;
-                LIBTB_REPORT_ERROR(ss.str());
-            } else {
-                ss << "State validated: "
-                   << "{"
-                   << "ID=" << id << ","
-                   << "DAT=" << actual
-                   << "}";
-                LIBTB_REPORT_DEBUG(ss.str());
-            }
-        }
-    }
-
-    const int N_{100000};
-    std::array<DatT, OPT_CNTRS_N> expected_;
-    std::deque<DatT> queue_;
-#define __declare_signals(__name, __type)     \
-    sc_core::sc_signal<__type> __name##_;
-    PORTS(__declare_signals)
-#undef __declare_signals
- public:
-    Vmulti_counter uut_;
+template<>
+struct scv_extensions<OP> : scv_enum_base<OP> {
+  SCV_ENUM_CTOR(OP) {
+    SCV_ENUM(OP_NOP);
+    SCV_ENUM(OP_INIT);
+    SCV_ENUM(OP_INC);
+    SCV_ENUM(OP_DEC);
+    SCV_ENUM(OP_QRY);
+  }
 };
 
-int sc_main(int argc, char **argv)
-{
-    using namespace libtb;
+struct Cmd {
+  OP op;
+  uint32_t id;
+  uint32_t dat;
+};
 
-    return LibTbSim<MultiCounterTb>(argc, argv).start();
+template<>
+struct scv_extensions<Cmd> : scv_extensions_base<Cmd> {
+  scv_extensions<OP> op;
+  scv_extensions<uint32_t> id, dat;
+  SCV_EXTENSIONS_CTOR(Cmd) {
+    SCV_FIELD(op);
+    SCV_FIELD(id);
+    SCV_FIELD(dat);
+  }
+};
+
+struct CmdTransactorIntf : sc_core::sc_interface {
+  virtual void issue(const Cmd & c) = 0;
+};
+
+struct CmdTransactor : sc_core::sc_module, CmdTransactorIntf {
+  //
+  sc_core::sc_in<bool> clk;
+  //
+  sc_core::sc_out<bool> cntr_pass;
+  sc_core::sc_out<uint32_t> cntr_id;
+  sc_core::sc_out<uint32_t> cntr_op;
+  sc_core::sc_out<uint32_t> cntr_dat;
+
+  CmdTransactor(sc_core::sc_module_name mn = "CmdXActor")
+      : sc_core::sc_module(mn) {}
+  
+  void issue(const Cmd & c) {
+    cntr_pass = true;
+    cntr_id = c.id;
+    cntr_op = c.op;
+    cntr_dat = c.dat;
+    wait(clk.posedge_event());
+    cntr_pass = false;
+  }
+};
+
+struct MultiCounterMdl {
+  void apply(const Cmd & c) {
+    switch (c.op) {
+      case OP_INIT: {
+        ctxts_[c.id] = c.dat;
+      } break;
+      case OP_INC: {
+        ctxts_[c.id]++;
+      } break;
+      case OP_DEC: {
+        ctxts_[c.id]--;
+      };
+      case OP_NOP:
+      case OP_QRY: {
+      } break;
+    }
+  }
+  uint32_t get(uint32_t id) {
+    return ctxts_[id];
+  }
+ private:
+  std::map<uint32_t, uint32_t> ctxts_;
+};
+
+struct MultiCounterTb : libtb2::Top<MultiCounterTb> {
+  sc_core::sc_port<CmdTransactorIntf> cmdintf;
+  
+  SC_HAS_PROCESS(MultiCounterTb);
+  MultiCounterTb(sc_core::sc_module_name mn = "t")
+      : uut_("uut"), cmdxactor_("CmdXActor") {
+    //
+    wd_.clk(clk_);
+    //
+    sampler_.clk(clk_);
+    //
+    resetter_.clk(clk_);
+    resetter_.rst(rst_);
+    //
+    cmdintf.bind(cmdxactor_);
+    cmdxactor_.clk(clk_);
+    cmdxactor_.cntr_pass(cntr_pass_);
+    cmdxactor_.cntr_id(cntr_id_);
+    cmdxactor_.cntr_op(cntr_op_);
+    cmdxactor_.cntr_dat(cntr_dat_);
+    //
+    uut_.clk(clk_);
+    uut_.rst(rst_);
+#define __bind_signals(__name, __type)          \
+    uut_.__name(__name ## _);
+    PORTS(__bind_signals)
+#undef __bind_signals
+
+    SC_THREAD(t_stimulus);
+    SC_METHOD(m_checker);
+    sensitive << sampler_.sample();
+    dont_initialize();
+
+    st_.reset();
+  }
+private:
+  void m_checker() {
+    if (status_qry_r_) {
+      const std::pair<uint32_t, uint32_t> e = expected_.front();
+      expected_.pop_front();
+      
+      const uint32_t actual_id = status_id_r_;
+      const uint32_t expected_id = e.first;
+      LIBTB2_ERROR_ON(actual_id != expected_id);
+
+      
+      const uint32_t actual = status_dat_r_;
+      const uint32_t expected = e.second;
+
+      LOGGER(INFO) << " Expected = " << expected
+                   << " Actual = " << actual
+                   << "\n";
+      LIBTB2_ERROR_ON(actual != expected);
+    }
+  }
+  void t_stimulus() {
+    struct cmd_constraints : scv_constraint_base {
+      scv_smart_ptr<Cmd> c;
+      SCV_CONSTRAINT_CTOR(cmd_constraints) {
+        SCV_CONSTRAINT((c->id() >= 0) && (c->id() < 256));
+      }
+    } cmd_c("cmd_constraint");
+
+    scv_smart_ptr<uint32_t> dat;
+    for (int i = 0; i < CNTRS_N; i++) {
+      dat->next();
+      
+      Cmd cmd;
+      cmd.op = OP_INIT;
+      cmd.id = i;
+      cmd.dat = *dat;
+      t_issue(cmd);
+    }
+    
+    while (true) {
+      cmd_c.next();
+      const Cmd cmd = *cmd_c.c;
+      
+      t_issue(cmd);
+      if (cmd.op == OP_QRY) {
+        expected_.push_back(std::make_pair(cmd.id, mdl_.get(cmd.id)));
+      }
+      st_.n++;
+      wait(clk_.posedge_event());
+    }
+  }
+  void t_issue(const Cmd & cmd) {
+    LOGGER(INFO) << "Issue cmd id = " << cmd.id
+                 << " op = " << to_string(cmd.op)
+                 << " dat = " << std::hex << cmd.dat << "\n";
+
+    cmdintf->issue(cmd);
+    mdl_.apply(cmd);
+  }
+  struct {
+    void reset() {
+      n = 0;
+    }
+    std::size_t n;
+  } st_;
+  MultiCounterMdl mdl_;
+  std::deque<std::pair<uint32_t, uint32_t> > expected_;
+  sc_core::sc_clock clk_;
+  sc_core::sc_signal<bool> rst_;
+#define __declare_signals(__name, __type)       \
+  sc_core::sc_signal<__type> __name##_;
+  PORTS(__declare_signals)
+#undef __declare_signals
+  libtb2::Resetter resetter_;
+  libtb2::Sampler sampler_;
+  libtb2::SimWatchDogCycles wd_;
+  CmdTransactor cmdxactor_;
+  uut_t uut_;
+};
+
+int sc_main(int argc, char ** argv) {
+  MultiCounterTb tb;
+  return libtb2::Sim::start(argc, argv);
 }
