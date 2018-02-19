@@ -25,5 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-hw_emit_legacy_sysc_answer(tb_ultra_wide_accumulator
+emit_answer(tb_ultra_wide_accumulator
   ultra_wide_accumulator.sv ultra_wide_accumulator.cpp)

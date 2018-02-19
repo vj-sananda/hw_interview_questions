@@ -25,84 +25,114 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-#include <libtb.h>
+#include <libtb2.hpp>
 #include <deque>
-#include <sstream>
 #include "vobj/Vultra_wide_accumulator.h"
+
+typedef Vultra_wide_accumulator uut_t;
+typedef sc_dt::sc_bv<128> rtl_word_t;
+typedef sc_dt::sc_biguint<128> beh_word_t;
+
+beh_word_t convert(const rtl_word_t & r) {
+  beh_word_t b;
+  b.range(127, 64) = r.range(127, 64).to_uint64();
+  b.range(63, 0) = r.range(63, 0).to_uint64();
+  return b;
+}
 
 #define PORTS(__func)                           \
   __func(pass, bool)                            \
   __func(clear, bool)                           \
-  __func(x, sc_dt::sc_bv<128>)                  \
-  __func(y_r, sc_dt::sc_bv<128>)                \
+  __func(x, rtl_word_t)                             \
+  __func(y_r, rtl_word_t)                           \
   __func(y_vld_r, bool)
 
-struct UltraWideAccumulatorTb : libtb::TopLevel
-{
-  using UUT = Vultra_wide_accumulator;
+struct AccumulatorModel {
+  AccumulatorModel() : word_(0) {}
+  void clear() {
+    word_ = 0;
+  }
+  void add(const beh_word_t & w) { word_ = word_ + w; }
+  beh_word_t word() const { return word_; }
+private:
+  beh_word_t word_;
+};
+
+struct UltraWideAccumulatorTb : libtb2::Top<UltraWideAccumulatorTb> {
   SC_HAS_PROCESS(UltraWideAccumulatorTb);
   UltraWideAccumulatorTb(sc_core::sc_module_name mn = "t")
-    : uut_("uut")
-  {
-    SC_METHOD(checker);
+    : uut_("uut") {
+
+    //
+    resetter_.clk(clk_);
+    resetter_.rst(rst_);
+    //
+    sampler_.clk(clk_);
+    //
+    wd_.clk(clk_);
+
+    uut_.clk(clk_);
+    uut_.rst(rst_);
+#define __bind_ports(__name, __type)            \
+    uut_.__name(__name ## _);
+    PORTS(__bind_ports)
+#undef __bind_ports
+
+    SC_THREAD(t_stimulus);
+    SC_METHOD(m_sample);
+    sensitive << sampler_.sample();
     dont_initialize();
-    sensitive << e_reset_done();
-    uut_.clk(clk());
-    uut_.rst(rst());
-#define __bind_signal(__name, __type)           \
-    uut_.__name(__name##_);
-    PORTS(__bind_signal)
-#undef __bind_signals
   }
-  void checker() {
-    if (y_vld_r_) {
-      std::stringstream ss;
-      sc_dt::sc_biguint<128> b = expected_.front();
-      ss << "Expected=0x" << std::hex << b;
+private:
+  void m_sample() {
+    if (!y_vld_r_)
+      return ;
 
-      const uint64_t b_hi = b.range(127, 64).to_uint64();
-      const uint64_t b_lo = b.range(63, 0).to_uint64();
+    const rtl_word_t r = applied_.front(); applied_.pop_front();
+    mdl_.add(convert(r));
 
-      const uint64_t y_hi = y_r_.read().range(127, 64).to_uint64();
-      const uint64_t y_lo = y_r_.read().range(63, 0).to_uint64();
-      if (b_hi != y_hi || b_lo != y_lo) {
-        ss << " actual=" << y_r_.read().to_string(sc_dt::SC_HEX);
-        LIBTB_REPORT_ERROR(ss.str());
-      } else {
-        LIBTB_REPORT_INFO(ss.str());
+    LOGGER(DEBUG) << "EXPECTED=" << mdl_.word().to_string(SC_HEX)
+                  << " ACTUAL=" << y_r_.read().to_string(SC_HEX) << "\n";
+    LIBTB2_ERROR_ON(mdl_.word() != convert(y_r_));
+  }
+  void t_stimulus() {
+    const libtb2::Options & o = libtb2::Sim::get_options();
+
+    wait(resetter_.done());
+
+    struct x_constraint : scv_constraint_base {
+      scv_smart_ptr<rtl_word_t> w;
+      SCV_CONSTRAINT_CTOR(x_constraint) {
+        SCV_CONSTRAINT(w() < (1ll << 32));
       }
-      expected_.pop_front();
-    }
-    next_trigger(clk().posedge_event());
-  }
-  bool run_test() {
-    t_wait_reset_done();
-
-    clear_ = true;
-    t_wait_posedge_clk();
-    clear_ = false;
-    t_wait_posedge_clk();
+    } x("x_constraint");
     
-    int n = 1000000;
-    sc_dt::sc_biguint<128> acc = 0;
-    while (n--) {
-      const int inc = libtb::random_integer_in_range(1 << 31, 0);
-      acc += sc_dt::sc_biguint<128>(inc);
-      expected_.push_back(acc);
+    while (true) {
+      x.next();
+
       pass_ = true;
-      x_ = inc;
-      t_wait_posedge_clk();
+      x_ = *x.w;
+
+      applied_.push_back(*x.w);
+      wait(clk_.posedge_event());
     }
-    return false;
   }
-  std::deque<sc_dt::sc_biguint<128> > expected_;
+  std::deque<rtl_word_t> applied_;
+  sc_core::sc_clock clk_;
+  sc_core::sc_signal<bool> rst_;
 #define __declare_signal(__name, __type)        \
   sc_core::sc_signal<__type> __name##_;
   PORTS(__declare_signal)
 #undef __declare_signal
-  UUT uut_;
+  libtb2::Resetter resetter_;
+  libtb2::Sampler sampler_;
+  libtb2::SimWatchDogCycles wd_;
+  AccumulatorModel mdl_;
+  uut_t uut_;
 };
 
-int sc_main (int argc, char **argv) {
-  return libtb::LibTbSim<UltraWideAccumulatorTb>(argc, argv).start();
+int sc_main(int argc, char **argv) {
+  UltraWideAccumulatorTb tb;
+  return libtb2::Sim::start(argc, argv);
 }
+

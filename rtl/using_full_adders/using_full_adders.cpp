@@ -91,4 +91,3 @@ int sc_main(int argc, char **argv) {
   UsingFullAddersTb<uint32_t> tb;
   return libtb2::Sim::start(argc, argv);
 }
-
