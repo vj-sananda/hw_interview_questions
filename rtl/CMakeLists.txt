@@ -41,7 +41,7 @@ macro(emit_answer target answer_sv answer_cc)
 endmacro()
 
 add_subdirectory(one_or_two)
-#add_subdirectory(latency)
+add_subdirectory(latency)
 #add_subdirectory(multi_counter)
 #add_subdirectory(multi_counter_variants)
 #add_subdirectory(gates_from_MUX2X1)

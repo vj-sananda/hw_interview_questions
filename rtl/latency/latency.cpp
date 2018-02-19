@@ -1,5 +1,5 @@
 //========================================================================== //
-// Copyright (c) 2016-17, Stephen Henry
+// Copyright (c) 2016-18, Stephen Henry
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -25,120 +25,119 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-#include <libtb.h>
-#include <sstream>
-#include "delay_pipe.h"
+#include <libtb2.hpp>
 #include "vobj/Vlatency.h"
 
 #define PORTS(__func)                           \
     __func(issue, bool)                         \
     __func(clear, bool)                         \
     __func(retire, bool)                        \
-    __func(issue_cnt_r, WordT)                  \
-    __func(aggregate_cnt_r, WordT)
+    __func(issue_cnt_r, T)                      \
+    __func(aggregate_cnt_r, T)
 
-using WordT = uint32_t;
+typedef Vlatency uut_t;
 
-class LatencyTb : libtb::TopLevel
-{
+template<typename T>
+struct LatencyTb : libtb2::Top<LatencyTb<T> > {
+  SC_HAS_PROCESS(LatencyTb);
+  LatencyTb(sc_core::sc_module_name mn = "t")
+    : uut_("uut") {
+    //
+    resetter_.clk(clk_);
+    resetter_.rst(rst_);
+    //
+    sampler_.clk(clk_);
+    //
+    wd_.clk(clk_);
+    //
+    dp_.clk(clk_);
+    dp_.in(issue_);
+    dp_.out(retire_);
+    //
+    uut_.clk(clk_);
+    uut_.rst(rst_);
+#define __bind_ports(__name, __type)            \
+    uut_.__name(__name ## _);
+    PORTS(__bind_ports)
+#undef __bind_ports
 
-public:
-    SC_HAS_PROCESS(LatencyTb);
-    LatencyTb(sc_core::sc_module_name mn = "t")
-        : uut_("uut") {
-        wave_on("foo.vcd", uut_);
-        //
-        in_flight_pipe_.clk(clk());
-        in_flight_pipe_.in(issue_);
-        in_flight_pipe_.out(retire_);
-        //
-        uut_.clk(clk());
-        uut_.rst(rst());
-#define __bind_signals(__name, __type)          \
-        uut_.__name(__name##_);
-        PORTS(__bind_signals)
-#undef __bind_signals
-    }
-
+    SC_THREAD(t_stimulus);
+  }
 private:
+  void t_stimulus() {
+    wait(resetter_.done());
 
-    bool run_test()
-    {
-        t_wait_reset_done();
-        for (int round = 0; round < 100; round++)
-        {
-            bool fail = false;
+    struct delay_constraint : scv_constraint_base {
+      scv_smart_ptr<std::size_t> p;
+      SCV_CONSTRAINT_CTOR(delay_constraint) {
+        SCV_CONSTRAINT((p() > 10) && (p() < 100));
+      }
+    } dconst("delay_constraint");
 
-            in_flight_pipe_.clear();
-            hw_clear();
-            const int expected_delay =
-                libtb::random_integer_in_range(100, 1);
-            in_flight_pipe_.set_delay(expected_delay);
-            run_round();
-
-            t_wait_posedge_clk(100);
-
-            t_wait_sync();
-            if (issue_cnt_r_ != TRANSACTION_COUNT) {
-                fail = true;
-
-                std::stringstream ss;
-                ss << "Invalid transaction count"
-                   << " Expected=" << TRANSACTION_COUNT
-                   << " Actual=" << issue_cnt_r_;
-                LIBTB_REPORT_ERROR(ss.str());
-            }
-            const int actual_delay =
-                (aggregate_cnt_r_ / issue_cnt_r_);
-            if (in_flight_pipe_.get_delay() != actual_delay) {
-                fail = true;
-
-                std::stringstream ss;
-                ss << "Computed delay is incorrect"
-                   << " Expected=" << in_flight_pipe_.get_delay()
-                   << " Actual=" << actual_delay;
-                LIBTB_REPORT_ERROR(ss.str());
-            }
-            if (!fail) {
-                std::stringstream ss;
-                ss << "PASS Delay validated=" << expected_delay;
-                LIBTB_REPORT_DEBUG(ss.str());
-            }
-        }
-        return false;
+    std::size_t N = 16;
+    LOGGER(INFO) << "Stimulus starts:\n";
+    while (N--) {
+      dconst.next();
+      const std::size_t delay = *dconst.p;
+      LOGGER(INFO) << "Running round latency = " << delay << "\n";
+      t_round(delay);
     }
+    LOGGER(INFO) << "Stimulus complete!\n";
+    libtb2::Sim::end();
+  }
+  void t_round(std::size_t delay) {
+    scv_bag<bool> ibag;
+    ibag.add(true, 20);
+    ibag.add(false, 80);
+    scv_smart_ptr<bool> i;
+    i->set_mode(ibag);
 
-    void run_round()
-    {
-        for (int i = 0; i < TRANSACTION_COUNT; i++) {
-            issue_ = true;
-            t_wait_posedge_clk();
-        }
-        issue_ = false;
+    dp_.set_delay(delay);
+    dp_.clear();
+    t_clear();
+
+    std::size_t n = 0;
+    while (n < 16) {
+      i->next();
+      issue_ = *i;
+      if (issue_)
+        n++;
+      wait(clk_.posedge_event());
+      issue_ = false;
+
+      wd_.pat();
     }
+    WAIT_FOR_CYCLES(clk_, 100);
 
-    void hw_clear()
-    {
-        clear_ = true;
-        t_wait_posedge_clk();
-        clear_ = false;
-    }
+    const std::size_t latency = (aggregate_cnt_r_ / issue_cnt_r_);
+    LIBTB2_ERROR_ON(latency != delay);
 
-    DelayPipe<bool> in_flight_pipe_;
-
-    const int TRANSACTION_COUNT{10};
-#define __declare_signals(__name, __type)       \
-    sc_core::sc_signal<__type> __name##_;
-    PORTS(__declare_signals)
-#undef __declare_signals
-    Vlatency uut_;
+    LOGGER(INFO) << " Expected = " << delay
+                 << " Actual = " << latency
+                 << " aggregate_cnt = " << aggregate_cnt_r_
+                 << " issue_cnt = " << issue_cnt_r_
+                 << "\n";
+  }
+  void t_clear() {
+    wait(clk_.posedge_event());
+    clear_ = true;
+    wait(clk_.posedge_event());
+    clear_ = false;
+  }
+  sc_core::sc_clock clk_;
+  sc_core::sc_signal<bool> rst_;
+#define __declare_signal(__name, __type)        \
+  sc_core::sc_signal<__type> __name##_;
+  PORTS(__declare_signal)
+#undef __declare_signal
+  libtb2::Resetter resetter_;
+  libtb2::Sampler sampler_;
+  libtb2::SimWatchDogCycles wd_;
+  libtb2::ConstantDelayPipe<bool> dp_;
+  uut_t uut_;
 };
 
-int sc_main(int argc, char **argv)
-{
-    using namespace libtb;
-
-    LatencyTb t;
-    LibTbContext::init(argc, argv);
-    return LibTbContext::start();
+int sc_main(int argc, char **argv) {
+  LatencyTb<uint32_t> tb;
+  return libtb2::Sim::start(argc, argv);
 }

@@ -49,9 +49,7 @@ beh_word_t convert(const rtl_word_t & r) {
 
 struct AccumulatorModel {
   AccumulatorModel() : word_(0) {}
-  void clear() {
-    word_ = 0;
-  }
+  void clear() { word_ = 0; }
   void add(const beh_word_t & w) { word_ = word_ + w; }
   beh_word_t word() const { return word_; }
 private:

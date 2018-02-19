@@ -25,4 +25,4 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-hw_emit_legacy_sysc_answer(tb_latency latency.sv latency.cpp)
+emit_answer(tb_latency latency.sv latency.cpp)
