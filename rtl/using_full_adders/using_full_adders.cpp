@@ -25,62 +25,70 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-#include <libtb.h>
-#include <sstream>
+#include <libtb2.hpp>
+
 #include "vobj/Vusing_full_adders.h"
+
 #define PORTS(__func)                           \
     __func(x, uint32_t)                         \
     __func(fail, bool)
 
-struct UsingFullAddersTb : libtb::TopLevel
-{
-    using UUT = Vusing_full_adders;
-    SC_HAS_PROCESS(UsingFullAddersTb);
-    UsingFullAddersTb(sc_core::sc_module_name mn = "t")
-        : uut_("uut")
-#define __construct_signal(__name, __type)      \
-          , __name##_(#__name)
-          PORTS(__construct_signal)
-#undef __construct_signal
-    {
-        SC_METHOD(m_checker);
-        dont_initialize();
-        sensitive << e_reset_done();
-        uut_.clk(clk());
-        uut_.rst(rst());
-#define __bind_signal(__name, __type)           \
-        uut_.__name(__name##_);
-        PORTS(__bind_signal)
-#undef __bind_signals
+typedef Vusing_full_adders uut_t;
+
+template<typename T>
+struct UsingFullAddersTb : libtb2::Top<UsingFullAddersTb<T> > {
+  SC_HAS_PROCESS(UsingFullAddersTb);
+  UsingFullAddersTb(sc_core::sc_module_name mn = "t") : uut_("uut") {
+    //
+    wd_.clk(clk_);
+    //
+    resetter_.clk(clk_);
+    resetter_.rst(rst_);
+    //
+    sampler_.clk(clk_);
+    //
+    uut_.clk(clk_);
+    uut_.rst(rst_);
+#define __bind_ports(__name, __type)            \
+    uut_.__name(__name ## _);
+    PORTS(__bind_ports)
+#undef __bind_ports
+    SC_THREAD(t_stimulus);
+    SC_METHOD(m_fail);
+    this->sensitive << sampler_.sample();
+    this->dont_initialize();
+  }
+private:
+  void m_fail() {
+    LIBTB2_ERROR_ON(fail_);
+  }
+  void t_stimulus() {
+    const libtb2::Options & o = libtb2::Sim::get_options();
+    wait(resetter_.done());
+    scv_smart_ptr<T> x;
+    while (true) {
+      x->next();
+      x_ = *x;
+      if (o.debug_on()) {
+        LOGGER(DEBUG) << "X=" << x_ << "\n";
+      }
+      wait(clk_.posedge_event());
     }
-    void m_checker() {
-        if (fail_) {
-            std::stringstream ss;
-            ss << "Mismatch detected x=" << x_;
-            LIBTB_REPORT_ERROR(ss.str());
-        }
-        next_trigger(clk().posedge_event());
-    }
-    bool run_test() {
-        x_ = 0;
-        t_wait_reset_done();
-        int n = 10000;
-        while (n--)
-        {
-            x_ = libtb::random_integer_in_range(7, 0);
-            t_wait_posedge_clk();
-        }
-        return false;
-    }
-#define __declare_signal(__name, __type)        \
-    sc_core::sc_signal<__type> __name##_;
-    PORTS(__declare_signal)
-#undef __declare_signal
-    UUT uut_;
+  }
+  sc_core::sc_clock clk_;
+  sc_core::sc_signal<bool> rst_;
+#define __declare_signals(__name, __type)       \
+  sc_core::sc_signal<__type> __name ## _;
+  PORTS(__declare_signals)
+#undef __declare_signals
+  libtb2::Resetter resetter_;
+  libtb2::Sampler sampler_;
+  libtb2::SimWatchDogCycles wd_;
+  uut_t uut_;
 };
 
-int sc_main (int argc, char **argv)
-{
-    using namespace libtb;
-    return LibTbSim<UsingFullAddersTb>(argc, argv).start();
+int sc_main(int argc, char **argv) {
+  UsingFullAddersTb<uint32_t> tb;
+  return libtb2::Sim::start(argc, argv);
 }
+

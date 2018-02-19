@@ -25,6 +25,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
+`include "libtb2.vh"
+
 module using_full_adders (output logic fail,
                           input logic [6:0] x,
                           input logic       clk,
@@ -99,5 +101,6 @@ module using_full_adders (output logic fail,
 
     end
 
+  `libtb2_assert(!fail);
 
 endmodule

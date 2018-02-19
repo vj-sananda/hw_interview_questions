@@ -109,9 +109,6 @@ private:
   sc_core::sc_signal<__type> __name ## _;
   PORTS(__declare_signals)
 #undef __declare_signals
-  libtb2::Resetter resetter_;
-  libtb2::Sampler sampler_;
-  libtb2::SimWatchDogCycles wd_;
   std::deque<T> d_;
   uut_t uut_;
 };
