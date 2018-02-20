@@ -25,5 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-hw_emit_legacy_sysc_answer(tb_detect_sequence
-  detect_sequence.sv detect_sequence.cpp)
+emit_answer(tb_detect_sequence detect_sequence.sv detect_sequence.cpp)
+
