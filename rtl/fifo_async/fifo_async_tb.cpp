@@ -45,7 +45,9 @@ struct FifoAsyncTb : libtb2::Top<FifoAsyncTb> {
   SC_HAS_PROCESS(FifoAsyncTb);
   FifoAsyncTb(sc_core::sc_module_name mn = "t")
     : uut_("uut"), wresetter_("wresetter"),
-      rresetter_("rresetter"), rclk_("rclk"), wclk_("wclk") {
+      rresetter_("rresetter"),
+      rclk_("rclk"), wclk_("wclk"),
+      rsampler_("rsampler"), wsampler("wsampler") {
     //
     wresetter_.clk(wclk_);
     wresetter_.rst(wrst_);
