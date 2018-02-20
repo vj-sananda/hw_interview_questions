@@ -25,178 +25,223 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-#include <libtb.h>
+#include <libtb2.hpp>
 #include <deque>
-#include <sstream>
+#include <vector>
+#include <algorithm>
+#include <iomanip>
 #include "vobj/Vfifo_multi_push.h"
 
 #define PORTS(__func)                           \
-    __func(push_0, bool)                        \
-    __func(push_0_data, DataT)                  \
-    __func(push_1, bool)                        \
-    __func(push_1_data, DataT)                  \
-    __func(push_2, bool)                        \
-    __func(push_2_data, DataT)                  \
-    __func(push_3, bool)                        \
-    __func(push_3_data, DataT)                  \
-    __func(pop_0, bool)                         \
-    __func(pop_0_data_r, DataT)                 \
-    __func(pop_0_valid_r, bool)                 \
-    __func(empty_r, bool)                       \
-    __func(full_r, FullT)
+  __func(push_0, bool)                          \
+  __func(push_0_data, uint32_t)                 \
+  __func(push_1, bool)                          \
+  __func(push_1_data, uint32_t)                 \
+  __func(push_2, bool)                          \
+  __func(push_2_data, uint32_t)                 \
+  __func(push_3, bool)                          \
+  __func(push_3_data, uint32_t)                 \
+  __func(pop_0, bool)                           \
+  __func(pop_0_data_r, uint32_t)                \
+  __func(pop_0_valid_r, bool)                   \
+  __func(empty_r, bool)                         \
+  __func(full_r, uint32_t)
 
-struct FifoMultiPushTb : libtb::TopLevel
-{
-    using UUT = Vfifo_multi_push;
-    using DataT = uint32_t;
-    using FullT = uint32_t;
-
-    SC_HAS_PROCESS(FifoMultiPushTb);
-    FifoMultiPushTb(sc_core::sc_module_name mn = "t")
-        : uut_("uut")
-#define __construct_signals(__name, __type)     \
-        , __name##_(#__name)
-          PORTS(__construct_signals)
-#undef __construct_signals
-    {
-        SC_METHOD(m_checker);
-        sensitive << e_tb_sample();
-
-        SC_METHOD(m_popper);
-        sensitive << e_tb_sample();
-
-        uut_.clk(clk());
-        uut_.rst(rst());
-#define __bind_ports(__name, __type)            \
-        uut_.__name(__name##_);
-        PORTS(__bind_ports)
-#undef __bind_ports
-    }
-
-    void push_idle()
-    {
-        //
-        push_0_ = false;
-        push_0_data_ = DataT();
-        //
-        push_1_ = false;
-        push_1_data_ = DataT();
-        //
-        push_2_ = false;
-        push_2_data_ = DataT();
-        //
-        push_3_ = false;
-        push_3_data_ = DataT();
-    }
-
-    void push_random()
-    {
-        t_wait_sync();
-      
-        int i = libtb::random_integer_in_range(4);
-
-        std::vector<DataT> dat;
-
-        if (full_r_) goto __end;
-        
-        DataT d;
-        switch (i)
-        {
-        case 4:
-            d = libtb::random<DataT>();
-            push_3_ = true;
-            push_3_data_ = d;
-            dat.push_back(d);
-
-        case 3:
-            d = libtb::random<DataT>();
-            push_2_ = true;
-            push_2_data_ = d;
-            dat.push_back(d);
-
-        case 2:
-            d = libtb::random<DataT>();
-            push_1_ = true;
-            push_1_data_ = d;
-            dat.push_back(d);
-
-        case 1:
-            d = libtb::random<DataT>();
-            push_0_ = true;
-            push_0_data_ = d;
-            dat.push_back(d);
-        }
-
-        std::reverse(std::begin(dat), std::end(dat));
-        std::copy(std::begin(dat),
-                  std::end(dat),
-                  std::back_inserter(expectation_));
-
-    __end:
-        t_wait_posedge_clk();
-        push_idle();
-    }
-
-    bool run_test()
-    {
-        t_wait_reset_done();
-        reset_complete_ = true;
-
-        LIBTB_REPORT_INFO("Stimulus starts...");
-
-        int n = 100;
-        while (n--)
-            push_random();
-
-        LIBTB_REPORT_INFO("Stimulus ends.");
-        return 0;
-    }
-
-    void  m_popper()
-    {
-        pop_0_ = true;
-    }
-
-    void m_checker()
-    {
-        if (!reset_complete_)
-          return;
-        
-        if (pop_0_valid_r_) {
-            const DataT actual = pop_0_data_r_;
-
-            if (expectation_.size() == 0) {
-                LIBTB_REPORT_ERROR("Unexpected data valid");
-                return ;
-            }
-
-            const DataT expected = expectation_.front();
-            expectation_.pop_front();
-
-            if (actual != expected) {
-                std::stringstream ss;
-                ss << "Mismatch detected"
-                   << " Actual: " << std::hex << actual
-                   << " Expected: " << std::hex << expected
-                    ;
-                LIBTB_REPORT_ERROR(ss.str());
-            }
-        }
-    }
-
-    std::deque<DataT> expectation_;
-
-    bool reset_complete_{false};
-    const int N{1000};
-#define __declare_signals(__name, __type)       \
-    sc_core::sc_signal<__type> __name##_;
-    PORTS(__declare_signals)
-#undef __declare_signals
-    UUT uut_;
+struct FifoMultiPushCmd {
+  //
+  uint32_t push;
+  uint32_t push_0_data;
+  uint32_t push_1_data;
+  uint32_t push_2_data;
+  uint32_t push_3_data;
 };
 
-int sc_main (int argc, char **argv)
-{
-    using namespace libtb;
-    return LibTbSim<FifoMultiPushTb>(argc, argv).start();
+template<>
+struct scv_extensions<FifoMultiPushCmd> : public scv_extensions_base<FifoMultiPushCmd> {
+  //
+  scv_extensions<uint32_t> push;
+  scv_extensions<uint32_t> push_0_data;
+  scv_extensions<uint32_t> push_1_data;
+  scv_extensions<uint32_t> push_2_data;
+  scv_extensions<uint32_t> push_3_data;
+
+  SCV_EXTENSIONS_CTOR(FifoMultiPushCmd) {
+    SCV_FIELD(push);
+    SCV_FIELD(push_0_data);
+    SCV_FIELD(push_1_data);
+    SCV_FIELD(push_2_data);
+    SCV_FIELD(push_3_data);
+  }
+};
+
+struct FifoMultiPushCmdConstraint : scv_constraint_base {
+  scv_smart_ptr<FifoMultiPushCmd> cmd;
+  SCV_CONSTRAINT_CTOR(FifoMultiPushCmdConstraint) {
+    SCV_CONSTRAINT((cmd->push() == 0x0) ||
+                   (cmd->push() == 0x1) ||
+                   (cmd->push() == 0x3) ||
+                   (cmd->push() == 0x7) ||
+                   (cmd->push() == 0xF));
+  }
+};
+
+struct FifoMultiPushTb : libtb2::Top<FifoMultiPushTb> {
+  typedef Vfifo_multi_push uut_t;
+  SC_HAS_PROCESS(FifoMultiPushTb);
+  FifoMultiPushTb(sc_core::sc_module_name mn = "t")
+    : uut_("uut") {
+    //
+    sampler_.clk(clk_);
+    //
+    resetter_.clk(clk_);
+    resetter_.rst(rst_);
+    //
+    wd_.clk(clk_);
+    //
+    uut_.clk(clk_);
+    uut_.rst(rst_);
+#define __declare_signals(__name, __type)       \
+    uut_.__name(__name ## _);
+    PORTS(__declare_signals)
+#undef __declare_signals
+    SC_THREAD(t_stimulus);
+    SC_THREAD(t_pop);
+    SC_METHOD(m_checker);
+    sensitive << sampler_.sample();
+    dont_initialize();
+
+    st_.reset();
+  }
+  void end_of_simulation() {
+    st_.report();
+  }
+private:
+  void t_pop() {
+    wait(resetter_.done());
+
+    scv_smart_ptr<bool> pop;
+    while (true) {
+      pop->next();
+
+      wait(sampler_.sample());
+      pop_0_ = empty_r_ ? false : *pop;
+      wait(clk_.posedge_event());
+    }
+  }
+  void m_checker() {
+    if (pop_0_valid_r_) {
+      const uint32_t actual = pop_0_data_r_;
+      const uint32_t expected = expected_.front(); expected_.pop_front();
+
+      LOGGER(INFO) << std::hex << std::setw(8) << std::setfill('0')
+                   << " Expected = 0x" << expected
+                   << " Actual = 0x" << actual
+                   << "\n";
+      LIBTB2_ERROR_ON(actual != expected);
+    }
+  }
+  void t_stimulus() {
+    wait(resetter_.done());
+
+    FifoMultiPushCmdConstraint c("FifoMultiPushCmdConstraint");
+    while (true) {
+      c.next();
+
+      push_0_ = false;
+      push_1_ = false;
+      push_2_ = false;
+      push_3_ = false;
+
+      const uint32_t push = c.cmd->push;
+#define BIT_IS_SET(__w, __b) ((((__w) >> (__b)) & 0x1) == true)
+
+      if (BIT_IS_SET(full_r_, 0))
+        goto __done;
+      
+      if (BIT_IS_SET(push, 0)) {
+        push_0_ = true;
+        push_0_data_ = c.cmd->push_0_data;
+
+        expected_.push_back(c.cmd->push_0_data);
+
+        st_.n++;
+        st_.cnt[0]++;
+      }
+
+      if (BIT_IS_SET(full_r_, 1))
+        goto __done;
+      
+      if (BIT_IS_SET(push, 1)) {
+        push_1_ = true;
+        push_1_data_ = c.cmd->push_1_data;
+        
+        expected_.push_back(c.cmd->push_1_data);
+
+        st_.n++;
+        st_.cnt[1]++;
+      }
+      
+      if (BIT_IS_SET(full_r_, 2))
+        goto __done;
+      
+      if (BIT_IS_SET(push, 2)) {
+        push_2_ = true;
+        push_2_data_ = c.cmd->push_2_data;
+        
+        expected_.push_back(c.cmd->push_2_data);
+
+        st_.n++;
+        st_.cnt[2]++;
+      }
+      
+      if (BIT_IS_SET(full_r_, 3))
+        goto __done;
+      
+      if (BIT_IS_SET(push, 3)) {
+        push_3_ = true;
+        push_3_data_ = c.cmd->push_3_data;
+
+        expected_.push_back(c.cmd->push_3_data);
+
+        st_.n++;
+        st_.cnt[3]++;
+      }
+#undef BIT_IS_SET
+      
+    __done:
+      wait(clk_.posedge_event());
+    }
+  }
+  struct {
+    void reset() {
+      n = 0;
+      cnt.resize(4);
+      std::fill(cnt.begin(), cnt.end(), 0);
+    }
+    void report() {
+      LOGGER(INFO) << std::dec << "n = " << n << " cnt = ";
+      for (std::size_t i = 0; i < cnt.size(); i++)
+        LOGGER(INFO) << cnt[i] << " ";
+      LOGGER(INFO) << "\n";
+    }
+    std::size_t n;
+    std::vector<std::size_t> cnt;
+  } st_;
+  std::deque<uint32_t> expected_;
+  sc_core::sc_clock clk_;
+  sc_core::sc_signal<bool> rst_;
+#define __declare_signals(__name, __type)       \
+  sc_core::sc_signal<__type> __name ## _;
+  PORTS(__declare_signals)
+#undef __declare_signals
+  libtb2::Sampler sampler_;
+  libtb2::Resetter resetter_;
+  libtb2::SimWatchDogCycles wd_;
+  uut_t uut_;
+};
+SC_MODULE_EXPORT(FifoMultiPushTb);
+
+int sc_main(int argc, char **argv) {
+  FifoMultiPushTb tb;
+  return libtb2::Sim::start(argc, argv);
 }

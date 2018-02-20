@@ -47,7 +47,7 @@ struct FifoAsyncTb : libtb2::Top<FifoAsyncTb> {
     : uut_("uut"), wresetter_("wresetter"),
       rresetter_("rresetter"),
       rclk_("rclk"), wclk_("wclk"),
-      rsampler_("rsampler"), wsampler("wsampler") {
+      rsampler_("rsampler"), wsampler_("wsampler") {
     //
     wresetter_.clk(wclk_);
     wresetter_.rst(wrst_);

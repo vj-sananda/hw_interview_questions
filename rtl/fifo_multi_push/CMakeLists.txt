@@ -25,5 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-hw_emit_legacy_sysc_answer(tb_fifo_multi_push
-  fifo_multi_push.sv fifo_multi_push.cpp)
+emit_answer(tb_fifo_multi_push fifo_multi_push.sv fifo_multi_push.cpp)
+
