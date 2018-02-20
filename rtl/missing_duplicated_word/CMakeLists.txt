@@ -25,5 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-hw_emit_legacy_sysc_answer(tb_missing_duplicated_word
+emit_answer(tb_missing_duplicated_word
   missing_duplicated_word.sv missing_duplicated_word.cpp)

@@ -25,123 +25,111 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-#include <libtb.h>
+#include <libtb2.hpp>
 #include <vector>
 #include <algorithm>
-#include <sstream>
 #include "vobj/Vmissing_duplicated_word.h"
 
 #define PORTS(__func)                           \
-    __func(bool, state_upt)                     \
-    __func(IdT, state_id)                       \
-    __func(DatT, state_dat)                     \
-    __func(bool, cntrl_start)                   \
-    __func(bool, cntrl_busy_r)                  \
-    __func(DatT, cntrl_dat_r)
+  __func(state_upt, bool)                       \
+  __func(state_id, uint32_t)                    \
+  __func(state_dat, uint32_t)                   \
+  __func(cntrl_start, bool)                     \
+  __func(cntrl_busy_r, bool)                    \
+  __func(cntrl_dat_r, uint32_t)
 
-constexpr int OPT_W = 5;
-constexpr int OPT_N = 17;
+typedef Vmissing_duplicated_word uut_t;
 
-struct MissingDuplicatedWordTb : libtb::TopLevel
-{
-    using UUT = Vmissing_duplicated_word;
-    using IdT = uint32_t;
-    using DatT = uint32_t;
+const int N = 8;
 
-    SC_HAS_PROCESS(MissingDuplicatedWordTb);
-    MissingDuplicatedWordTb(sc_core::sc_module_name mn = "t")
-        : libtb::TopLevel(mn)
-        , uut_("uut")
-#define __construct_signals(__type, __name)     \
-        , __name##_(#__name)
-        PORTS(__construct_signals)
-#undef __construct_signals
-    {
-        uut_.clk(clk());
-        uut_.rst(rst());
-#define __bind_signals(__type, __name)          \
-        uut_.__name(__name##_);
-        PORTS(__bind_signals)
+struct MissingDuplicateWordTb : libtb2::Top<MissingDuplicateWordTb> {
+  SC_HAS_PROCESS(MissingDuplicateWordTb);
+  MissingDuplicateWordTb(sc_core::sc_module_name mn = "t")
+    : uut_("uut") {
+    //
+    resetter_.clk(clk_);
+    resetter_.rst(rst_);
+    //
+    sampler_.clk(clk_);
+    //
+    wd_.clk(clk_);
+    //
+    uut_.clk(clk_);
+    uut_.rst(rst_);
+#define __bind_signals(__name, __type)          \
+    uut_.__name(__name ## _);
+    PORTS(__bind_signals)
 #undef __bind_signals
+
+    SC_THREAD(t_stimulus);
+  }
+private:
+  void t_stimulus() {
+    wait(resetter_.done());
+
+    cntrl_start_ = false;
+    while (true) {
+      const uint32_t missing = initialize();
+
+      cntrl_start_ = true;
+      wait(clk_.posedge_event());
+      cntrl_start_ = false;
+      do {
+        wait(sampler_.sample());
+      } while (cntrl_busy_r_);
+      const uint32_t detected = cntrl_dat_r_;
+
+      LOGGER(INFO) << " Missing = " << missing
+                   << " Detected = " << detected << "\n";
+      LIBTB2_ERROR_ON(missing != detected);
+    }
+  }
+  uint32_t initialize() {
+    struct n_constraint : scv_constraint_base {
+      scv_smart_ptr<uint32_t> p;
+      SCV_CONSTRAINT_CTOR(n_constraint) {
+        SCV_CONSTRAINT((p() >= 0) && (p() < 32));
+      }
+    } n_constraint("n_constraint");
+
+    std::vector<uint32_t> ns;
+    while (ns.size() != (N + 1)) {
+      n_constraint.next();
+      const uint32_t n = *n_constraint.p;
+      if (std::find(ns.begin(), ns.end(), n) == ns.end())
+        ns.push_back(n);
     }
 
-    void b_configure_state()
-    {
-        std::vector<DatT> d;
-        non_duplicated_ =
-            libtb::random_integer_in_range((1 << OPT_W) - 1);
-        {
-            std::stringstream ss;
-            ss << "Non duplicated number is: " << non_duplicated_;
-            LIBTB_REPORT_DEBUG(ss.str());
-        }
-
-        d.push_back(non_duplicated_);
-        int cnt = OPT_N - 1;
-        while (cnt) {
-            const DatT duplicated =
-                libtb::random_integer_in_range((1 << OPT_W) - 1);
-            if (non_duplicated_ != duplicated) {
-                std::stringstream ss;
-                ss << "Duplicated number is: " << duplicated;
-                LIBTB_REPORT_DEBUG(ss.str());
-                d.push_back(duplicated);
-                d.push_back(duplicated);
-                cnt -= 2;
-            }
-        }
-        std::random_shuffle(d.begin(), d.end());
-
+    for (int i = 0; i < N + 1; i++) {
+      if (i < N) {
         state_upt_ = true;
-        for (int i = 0; i < OPT_N; i++)
-        {
-            const DatT duplicated = d[i];
-            state_id_ = i;
-            state_dat_ = duplicated;
-            t_wait_posedge_clk();
-        }
-        state_upt_ = false;
+        state_id_ = i;
+        state_dat_ = ns [i];
+        LOGGER(DEBUG) << "Update id = " << i << " dat = " << ns [i] << "\n";
+        wait(clk_.posedge_event());
+      }
+      state_dat_ = ns [i];
+      state_id_ = i + N;
+      LOGGER(DEBUG) << "Update id = " << (i + N) << " dat = " << ns [i] << "\n";
+      wait(clk_.posedge_event());
     }
-
-    bool run_test()
-    {
-        t_wait_reset_done();
-        LIBTB_REPORT_INFO("Stimulus starts...");
-
-        b_configure_state();
-
-        cntrl_start_ = true;
-        t_wait_posedge_clk();
-        cntrl_start_ = false;
-
-        wait(cntrl_busy_r_.negedge_event());
-        t_wait_posedge_clk();
-
-        if (cntrl_dat_r_ != non_duplicated_) {
-            std::stringstream ss;
-            ss << "Mismatch detected"
-               << " Expected: " << non_duplicated_
-               << " Actual: " << cntrl_dat_r_
-                ;
-            LIBTB_REPORT_ERROR(ss.str());
-        }
-
-        wait(1000, SC_NS);
-
-        LIBTB_REPORT_INFO("Stimulus ends.");
-        return false;
-    }
-
-    DatT non_duplicated_;
-#define __declare_signals(__type, __name)       \
-    sc_core::sc_signal<__type> __name##_;
-    PORTS(__declare_signals)
+    state_upt_ = false;
+    return ns.back();
+  }
+  sc_core::sc_clock clk_;
+  sc_core::sc_signal<bool> rst_;
+#define __declare_signals(__name, __type)       \
+  sc_core::sc_signal<__type> __name##_;
+  PORTS(__declare_signals)
 #undef __declare_signals
-    UUT uut_;
+  libtb2::Sampler sampler_;
+  libtb2::Resetter resetter_;
+  libtb2::SimWatchDogCycles wd_;
+  uut_t uut_;
 };
+SC_MODULE_EXPORT(MissingDuplicateWordTb);
 
-int sc_main (int argc, char **argv)
-{
-    using namespace libtb;
-    return LibTbSim<MissingDuplicatedWordTb>(argc, argv).start();
+int sc_main(int argc, char ** argv) {
+  MissingDuplicateWordTb tb;
+  return libtb2::Sim::start(argc, argv);
 }

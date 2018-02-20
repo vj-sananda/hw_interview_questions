@@ -25,6 +25,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
+`include "libtb2.vh"
+
 module missing_duplicated_word #(parameter int W = 5, parameter int N = 17) (
 
    //======================================================================== //
@@ -61,7 +63,7 @@ module missing_duplicated_word #(parameter int W = 5, parameter int N = 17) (
 );
 
   typedef logic [W-1:0] w_t;
-  typedef logic [(W**2)-1:0] w_dec_t;
+  typedef logic [(2 ** W)-1:0] w_dec_t;
   typedef logic [$clog2(N)-1:0] id_t;
   typedef logic [N-1:0] n_t;
 
@@ -107,10 +109,10 @@ module missing_duplicated_word #(parameter int W = 5, parameter int N = 17) (
       endcase
 
       //
-      cntrl_busy_w   = cntrl_start | (cntrl_busy_r & rd_ptr_w != id_t'(N));
+      cntrl_busy_w   = cntrl_start | (cntrl_busy_r & (rd_ptr_w != id_t'(N)));
 
       //
-      set_vector_en      = cntrl_start | cntrl_busy_r;
+      set_vector_en  = cntrl_start |  cntrl_busy_r;
 
       //
       casez ({cntrl_start, cntrl_busy_r})
@@ -121,7 +123,7 @@ module missing_duplicated_word #(parameter int W = 5, parameter int N = 17) (
       endcase // casez ({cntrl_start, cntrl_busy_r})
 
       //
-      cntrl_dat_en  = cntrl_busy_r & (~cntrl_busy_w);
+      cntrl_dat_en  = cntrl_busy_r;
 
       //
       cntrl_dat_w   = '0;
@@ -130,7 +132,7 @@ module missing_duplicated_word #(parameter int W = 5, parameter int N = 17) (
           cntrl_dat_w  = w_t'(i);
 
     end // block: cntrl_PROC
-
+  
   // ======================================================================== //
   //                                                                          //
   // Flops                                                                    //
@@ -162,7 +164,7 @@ module missing_duplicated_word #(parameter int W = 5, parameter int N = 17) (
   always_ff @(posedge clk)
     if (set_vector_en)
       set_vector_r <= set_vector_w;
-
+  
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
