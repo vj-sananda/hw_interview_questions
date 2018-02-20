@@ -75,7 +75,6 @@ private:
   libtb2::SimWatchDogCycles wd_;
   uut_t uut_;
 };
-
 SC_MODULE_EXPORT(GatesFromMUX2X1Tb);
 
 int sc_main(int argc, char ** argv) {

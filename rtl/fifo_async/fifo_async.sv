@@ -25,6 +25,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
+`include "libtb2.vh"
+
 module fifo_async #(
      parameter integer W = 32
    , parameter integer N = 16
@@ -60,6 +62,7 @@ module fifo_async #(
    , input                                   pop
 
    , output logic [W-1:0]                    pop_data
+   , output logic                            pop_data_vld_r
 
    //======================================================================== //
    //                                                                         //
@@ -71,9 +74,17 @@ module fifo_async #(
    , output logic                            empty_r
    , output logic                            full_r
 );
+`include "libtb2_bdy.vh"
 
-  localparam ADDR_BITS = $clog2(N);
-  localparam PTR_BITS  = ADDR_BITS + 1;
+  `libtb2_static_assert(libtb2_pkg::is_power_of_2(N));
+  `libtb2_assert_clk(wclk, push & (~full_r));
+  `libtb2_assert_clk(rclk, pop & (~empty_r));
+
+  typedef struct packed {
+    logic                 x;
+    logic [$clog2(N)-1:0] a;
+  } addr_t;
+  localparam int ADDR_W  = $bits(addr_t);
 
   // ======================================================================== //
   //                                                                          //
@@ -82,42 +93,30 @@ module fifo_async #(
   // ======================================================================== //
 
   //
-  logic [PTR_BITS-1:0]                  rptr_w;
-  logic [PTR_BITS-1:0]                  rptr_r;
+  addr_t                                rptr_w;
+  addr_t                                rptr_r;
   logic                                 rptr_en;
   //
-  logic [PTR_BITS-1:0]                  wptr_w;
-  logic [PTR_BITS-1:0]                  wptr_r;
+  addr_t                                wptr_w;
+  addr_t                                wptr_r;
   logic                                 wptr_en;
   //
-  logic                                 uarch_empty_w;
-  logic                                 uarch_empty_r;
-  //
   logic                                 full_w;
+  logic                                 empty_w;
   //
-  logic [PTR_BITS-1:0]                  wptr_gray_w;
-  logic [PTR_BITS-1:0]                  wptr_gray_r;
+  addr_t                                wptr_gray_w;
+  addr_t                                wptr_gray_r;
   //
-  logic [PTR_BITS-1:0]                  rptr_gray_w;
-  logic [PTR_BITS-1:0]                  rptr_gray_r;
+  addr_t                                rptr_gray_w;
+  addr_t                                rptr_gray_r;
   //
-  logic [PTR_BITS-1:0]                  wptr_rsync;
-  logic [PTR_BITS-1:0]                  rptr_wsync;
+  addr_t                                wptr_rsync;
+  addr_t                                rptr_wsync;
   //
-  logic [PTR_BITS-1:0]                  wptr_gray_rsync_r;
-  logic [PTR_BITS-1:0]                  rptr_gray_wsync_r;
+  addr_t                                wptr_gray_rsync_r;
+  addr_t                                rptr_gray_wsync_r;
   //
-  logic                                 mem_en0;
-  logic                                 mem_en1;
-  //
-  logic [W-1:0]                         read_pipe_mem_rdata;
-  logic                                 read_pipe_mem_ren;
-  logic                                 read_pipe_read_en;
-  logic                                 read_pipe_read_adv;
-  logic                                 read_pipe_out_valid_r;
-  //
-  logic [ADDR_BITS-1:0]                 mem_addr0;
-  logic [ADDR_BITS-1:0]                 mem_addr1;
+  logic                                 pop_data_vld_w;
 
   // ======================================================================== //
   //                                                                          //
@@ -129,70 +128,31 @@ module fifo_async #(
   // ------------------------------------------------------------------------ //
   //
   always_comb
-    begin : async_cntrl_PROC
+    begin : full_PROC
 
       //
-      casez ({wrst, push})
-        2'b1_?:  wptr_w = '0;
-        2'b0_1:  wptr_w = wptr_r + 'b1;
-        default: wptr_w = wptr_r;
-      endcase // case ({wrst, push})
+      empty_w  = (rptr_w == wptr_rsync);
+      full_w   = (wptr_w.x ^ rptr_wsync.x) & (wptr_w.a == rptr_wsync.a);
 
-      //
-      wptr_en        = wrst | push;
-
-      //
-      casez ({rrst, read_pipe_read_adv})
-        2'b1_?:  rptr_w = '0;
-        2'b0_1:  rptr_w = rptr_r + 'b1;
-        default: rptr_w = rptr_r;
-      endcase // casez ({rrst, read_pipe_read_adv})
-
-      //
-      rptr_en        = rrst | read_pipe_read_adv;
-
-      //
-      mem_en0        = (~full_r) & push;
-
-      //
-      mem_en1        = '0;
-
-      //
-      uarch_empty_w  = rrst | (wptr_rsync ==  rptr_w);
-
-      //
-      casez (wrst)
-        1'b0:    full_w =   (    wptr_w [PTR_BITS-1]
-                               ^ rptr_wsync [PTR_BITS-1]
-                            )
-                          & (    wptr_w [ADDR_BITS-1:0]
-                              == rptr_wsync [ADDR_BITS-1:0]
-                            )
-                        ;
-        default: full_w = '0;
-      endcase
-
-      //
-      mem_addr0  = wptr_r [ADDR_BITS-1:0];
-
-      //
-      mem_addr1  = rptr_r [ADDR_BITS-1:0];
-
-    end // block: async_cntrl_PROC
-
-
+    end // block: full_PROC
+  
   // ------------------------------------------------------------------------ //
   //
   always_comb
-    begin : read_pipe_PROC
+    begin : async_cntrl_PROC
 
       //
-      read_pipe_read_en  = (~uarch_empty_r);
+      wptr_w          = push ? wptr_r + 'b1 : wptr_r;
+      wptr_en         = push;
 
       //
-      empty_r            = (~read_pipe_out_valid_r);
+      rptr_w          = pop ? rptr_r + 'b1 : rptr_r;
+      rptr_en         = pop;
 
-    end // block: read_pipe_PROC
+      //
+      pop_data_vld_w  = pop;
+
+    end // block: async_cntrl_PROC
 
   // ======================================================================== //
   //                                                                          //
@@ -203,35 +163,59 @@ module fifo_async #(
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge wclk)
-    wptr_gray_r <= wptr_gray_w;
+    if (wrst)
+      wptr_gray_r <= '0;
+    else
+      wptr_gray_r <= wptr_gray_w;
 
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge rclk)
-    rptr_gray_r <= rptr_gray_w;
+    if (rrst)
+      rptr_gray_r <= '0;
+    else
+      rptr_gray_r <= rptr_gray_w;
+
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge wclk)
+    if (wrst)
+      full_r <= 'b0;
+    else
+      full_r <= full_w;
 
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge rclk)
-    uarch_empty_r <= uarch_empty_w;
+    if (rrst)
+      empty_r <= 'b1;
+    else
+      empty_r <= empty_w;
 
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge wclk)
-    full_r <= full_w;
-
-  // ------------------------------------------------------------------------ //
-  //
-  always_ff @(posedge wclk)
-    if (wptr_en)
+    if (wrst)
+      wptr_r <= '0;
+    else if (wptr_en)
       wptr_r <= wptr_w;
 
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge rclk)
-    if (rptr_en)
+    if (rrst)
+      rptr_r <= '0;
+    else if (rptr_en)
       rptr_r <= rptr_w;
 
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge rclk)
+    if (rrst)
+      pop_data_vld_r <= 'b0;
+    else
+      pop_data_vld_r <= pop_data_vld_w;
+  
   // ======================================================================== //
   //                                                                          //
   // Instances                                                                //
@@ -240,23 +224,23 @@ module fifo_async #(
 
   // ------------------------------------------------------------------------ //
   //
-  gray_encode #(.W(PTR_BITS)) u_enc_wptr (.dec(wptr_r), .gray(wptr_gray_w));
+  gray_encode #(.W(ADDR_W)) u_enc_wptr (.dec(wptr_r), .gray(wptr_gray_w));
   
   // ------------------------------------------------------------------------ //
   //
-  gray_encode #(.W(PTR_BITS)) u_enc_rptr (.dec(rptr_r), .gray(rptr_gray_w));
+  gray_encode #(.W(ADDR_W)) u_enc_rptr (.dec(rptr_r), .gray(rptr_gray_w));
   
   // ------------------------------------------------------------------------ //
   //
-  gray_decode #(.W(PTR_BITS)) u_dec_wptr (.gray(wptr_gray_rsync_r), .dec(wptr_rsync));
+  gray_decode #(.W(ADDR_W)) u_dec_wptr (.gray(wptr_gray_rsync_r), .dec(wptr_rsync));
   
   // ------------------------------------------------------------------------ //
   //
-  gray_decode #(.W(PTR_BITS)) u_dec_rptr (.gray(rptr_gray_wsync_r), .dec(rptr_wsync));
+  gray_decode #(.W(ADDR_W)) u_dec_rptr (.gray(rptr_gray_wsync_r), .dec(rptr_wsync));
   
   // ------------------------------------------------------------------------ //
   //
-  sync_ff #(.W(PTR_BITS)) u_sync_rptr (
+  sync_ff #(.W(ADDR_W)) u_sync_rptr (
     //
       .clk               (wclk               )
     , .rst               (wrst               )
@@ -267,7 +251,7 @@ module fifo_async #(
 
   // ------------------------------------------------------------------------ //
   //
-  sync_ff #(.W(PTR_BITS)) u_sync_wptr (
+  sync_ff #(.W(ADDR_W)) u_sync_wptr (
     //
       .clk               (rclk               )
     , .rst               (rrst               )
@@ -277,42 +261,24 @@ module fifo_async #(
   );
 
   // ------------------------------------------------------------------------ //
-  //
+  //p
   dpsram #(.W(W), .N(N)) u_mem (
     //
       .clk0              (wclk               )
     //
-    , .en0               (mem_en0            )
+    , .en0               (push               )
     , .wen0              (1'b1               )
-    , .addr0             (mem_addr0          )
+    , .addr0             (wptr_r.a           )
     , .din0              (push_data          )
     , .dout0             ()
     //
     , .clk1              (rclk               )
     //
-    , .en1               (read_pipe_mem_ren  )
+    , .en1               (pop                )
     , .wen1              (1'b0               )
-    , .addr1             (mem_addr1          )
+    , .addr1             (rptr_r.a           )
     , .din1              ('0                 )
-    , .dout1             (read_pipe_mem_rdata)
-  );
-
-  // ------------------------------------------------------------------------ //
-  // TODO: deprecate
-  mem_egress_pipe #(.W(W)) u_read_pipe (
-    //
-      .clk               (rclk                 )
-    , .rst               (rrst                 )
-    //
-    , .read_en           (read_pipe_read_en    )
-    , .read_adv          (read_pipe_read_adv   )
-    //
-    , .mem_rdata         (read_pipe_mem_rdata  )
-    , .mem_ren           (read_pipe_mem_ren    )
-    //
-    , .out_accept        (pop                  )
-    , .out_valid_r       (read_pipe_out_valid_r)
-    , .out_data_r        (pop_data             )
+    , .dout1             (pop_data           )
   );
 
 endmodule // fifo_async

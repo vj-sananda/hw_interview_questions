@@ -25,92 +25,123 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-#include "fifo_async_tb.h"
-#include <sstream>
+#include "libtb2.hpp"
+#include "verilated_vcd_sc.h"
+#include <deque>
+#include "vobj/Vfifo_async.h"
 
-fifo_async_tb::fifo_async_tb() : libtb::TopLevel("t"), uut_("uut") {
-  SC_METHOD(m_checker);
-  sensitive << e_reset_done();
-  dont_initialize();
-}
-fifo_async_tb::~fifo_async_tb() {}
+#define PORTS(__func)                           \
+  __func(push, bool)                            \
+  __func(push_data, uint32_t)                   \
+  __func(pop, bool)                             \
+  __func(pop_data, uint32_t)                    \
+  __func(pop_data_vld_r, bool)                  \
+  __func(empty_r, bool)                         \
+  __func(full_r, bool)
 
-void fifo_async_tb::bind_rtl() {
-  uut_.rclk(clk());
-  uut_.rrst(rst());
-#define __bind_signals(__name, __type) uut_.__name(__name##_);
-  FIFO_ASYNC_PORTS(__bind_signals)
+typedef Vfifo_async uut_t;
+
+struct FifoAsyncTb : libtb2::Top<FifoAsyncTb> {
+  SC_HAS_PROCESS(FifoAsyncTb);
+  FifoAsyncTb(sc_core::sc_module_name mn = "t")
+    : uut_("uut"), wresetter_("wresetter"),
+      rresetter_("rresetter"), rclk_("rclk"), wclk_("wclk") {
+    //
+    wresetter_.clk(wclk_);
+    wresetter_.rst(wrst_);
+    //
+    rresetter_.clk(rclk_);
+    rresetter_.rst(rrst_);
+    //
+    rsampler_.clk(rclk_);
+    wsampler_.clk(wclk_);
+    //
+    wd_.clk(rclk_);
+    //
+    uut_.rclk(rclk_);
+    uut_.rrst(rrst_);
+    //
+    uut_.wclk(wclk_);
+    uut_.wrst(wrst_);
+    //
+#define __bind_signals(__name, __type)       \
+    uut_.__name(__name ## _);
+    PORTS(__bind_signals)
 #undef __bind_signals
-}
 
-void fifo_async_tb::pop_idle() { pop_ = false; }
-
-void fifo_async_tb::m_checker() {
-  pop_idle();
-
-  if (!empty_r_) {
-    pop_ = true;
-    if (queue_.size() == 0) {
-        // TODO: Error raised pre-reset. Modify libtb to hold-off e_reset_done
-//      LIBTB_REPORT_ERROR("Pop not predicted");
-      return;
-    }
-    const WordT actual = pop_data_;
-    const WordT expected = queue_.front();
-    queue_.pop_front();
-
-    if (expected != actual) {
-      std::stringstream ss;
-      ss << "Actual: " << std::hex << actual << " "
-         << "Expected: " << std::hex << expected;
-      LIBTB_REPORT_ERROR(ss.str());
+    SC_THREAD(t_push);
+    SC_THREAD(t_pop);
+    SC_METHOD(m_checker);
+    sensitive << rsampler_.sample();
+    dont_initialize();
+  }
+private:
+  void m_checker() {
+    if (pop_data_vld_r_) {
+      LIBTB2_ERROR_ON(expected_.empty());
+      const uint32_t expected = expected_.front(); expected_.pop_front();
+      const uint32_t actual = pop_data_;
+      LOGGER(INFO) << " Expected = " << std::hex << expected
+                   << " Actual = " << actual
+                   << "\n";
+      LIBTB2_ERROR_ON(actual != expected);
     }
   }
-  next_trigger(e_tb_sample());
-}
+  void t_push() {
+    wait(wresetter_.done());
 
+    scv_smart_ptr<bool> push;
+    scv_smart_ptr<uint32_t> push_data;
+    while (true) {
+      push_ = false;
 
-struct test_0 : public fifo_async_tb {
-    SC_HAS_PROCESS(test_0);
-    test_0() { bind_rtl(); }
-    virtual ~test_0() {}
-    bool run_test() {
-        LIBTB_REPORT_INFO("Stimulus begins");
-        b_reset();
+      wait(wsampler_.sample());
+      if (!full_r_) {
+        push->next();
+        push_data->next();
 
-        unsigned N = 10000;
-        while (N--) b_push(libtb::random<WordT>());
-
-        LIBTB_REPORT_INFO("Stimulus ends");
-        return true;
+        const bool rtl_push = *push;
+        const uint32_t rtl_push_data = *push_data;
+        
+        push_ = rtl_push;
+        push_data_ = rtl_push_data;
+        if (rtl_push) {
+          expected_.push_back(rtl_push_data);
+          LOGGER(INFO) << "Push data = " << std::hex << rtl_push_data << "\n";
+        }
+      }
+      wait(wclk_.posedge_event());
     }
-    void b_reset() {
-        wrst_ = false;
-        wait(wclk_.posedge_event());
-        wrst_ = true;
-        wait(wclk_.posedge_event());
-        wrst_ = false;
-    }
-    virtual void bind_rtl() {
-        uut_.wclk(wclk_);
-        uut_.wrst(wrst_);
-        fifo_async_tb::bind_rtl();
-    }
+  }
+  void t_pop() {
+    wait(rresetter_.done());
 
-    void b_push(WordT w) {
-        push_ = true;
-        push_data_ = w;
-        queue_.push_back(w);
-        wait(wclk_.posedge_event());
-    }
+    scv_smart_ptr<bool> pop;
+    while (true) {
+      pop_ = false;
 
-    sc_core::sc_clock wclk_;
-    sc_core::sc_signal<bool> wrst_;
+      wait(rsampler_.sample());
+      if (!empty_r_) {
+        pop->next();
+        pop_ = *pop;
+      }
+      wait(rclk_.posedge_event());
+    }
+  }
+  std::deque<uint32_t> expected_;
+  sc_core::sc_clock wclk_, rclk_;
+  sc_core::sc_signal<bool> wrst_, rrst_;
+#define __declare_signals(__name, __type)       \
+  sc_core::sc_signal<__type> __name ## _;
+  PORTS(__declare_signals)
+#undef __declare_signals
+  libtb2::Sampler rsampler_, wsampler_;
+  libtb2::Resetter wresetter_, rresetter_;
+  libtb2::SimWatchDogCycles wd_;
+  uut_t uut_;
 };
 
-int sc_main(int argc, char **argv) {
-    using namespace libtb;
-    test_0 t;
-    LibTbContext::init(argc, argv);
-    return LibTbContext::start();
+int sc_main(int argc, char ** argv) {
+  FifoAsyncTb tb;
+  return libtb2::Sim::start(argc, argv);
 }

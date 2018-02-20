@@ -25,5 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== ##
 
-hw_emit_legacy_sysc_answer(tb_fifo_async
-  fifo_async_tb.sv fifo_async_tb.cpp)
+emit_answer(tb_fifo_async fifo_async.sv fifo_async_tb.cpp)
+
