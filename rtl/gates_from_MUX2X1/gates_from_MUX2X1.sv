@@ -25,6 +25,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
+`include "libtb2.vh"
+
 module gates_from_MUX2X1 ( input a, input b, output logic fail );
 
   logic [3:0] fail_v;

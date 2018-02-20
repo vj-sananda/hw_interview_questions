@@ -25,7 +25,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-#include <libtb.h>
+#include <libtb2.hpp>
 #include "vobj/Vgates_from_MUX2X1.h"
 
 #define PORTS(__func)                           \
@@ -33,64 +33,52 @@
     __func(b, bool)                             \
     __func(fail, bool)
 
-struct GatesFromMux2X1Tb : libtb::TopLevel
-{
-    SC_HAS_PROCESS(GatesFromMux2X1Tb);
-    GatesFromMux2X1Tb(sc_core::sc_module_name mn = "t")
-        : uut_("uut") {
+typedef Vgates_from_MUX2X1 uut_t;
 
-        SC_METHOD(m_checker);
-        sensitive << e_tb_sample();
-        dont_initialize();
+struct GatesFromMUX2X1Tb : libtb2::Top<GatesFromMUX2X1Tb> {
+  SC_HAS_PROCESS(GatesFromMUX2X1Tb);
+  GatesFromMUX2X1Tb(sc_core::sc_module_name mn = "t")
+    : uut_("uut") {
+    sampler_.clk(clk_);
+    wd_.clk(clk_);
+#define __bind_signals(__name, __type)          \
+    uut_.__name(__name ## _);
+    PORTS(__bind_signals)
+#undef __bind_signals
 
-#define __bind_ports(__name, __type)            \
-        uut_.__name(__name##_);
-        PORTS(__bind_ports)
-#undef __bind_ports
+    SC_METHOD(m_checker);
+    sensitive << sampler_.sample();
+    dont_initialize();
+    SC_THREAD(t_stimulus);
+  }
+private:
+  void t_stimulus() {
+    scv_smart_ptr<bool> a, b;
+    while (true) {
+      a->next();
+      b->next();
+      
+      a_ = *a; b_ = *b;
+      LOGGER(INFO) << "a = " << a_ << " b = " << b_ << "\n";
+      wait(clk_.posedge_event());
     }
-
-    bool run_test() {
-        a_ = false;
-        b_ = false;
-        t_wait_reset_done();
-
-        //
-        a_ = false;
-        b_ = false;
-        t_wait_posedge_clk();
-
-        //
-        a_ = true;
-        b_ = false;
-        t_wait_posedge_clk();
-
-        //
-        a_ = false;
-        b_ = true;
-        t_wait_posedge_clk();
-
-        //
-        a_ = true;
-        b_ = true;
-        t_wait_posedge_clk();
-
-        return false;
-    }
-
-    void m_checker() {
-        LIBTB_ASSERT_ERROR(!fail_);
-    }
-
-#define __define_signals(__name, __type)        \
-    sc_core::sc_signal<__type> __name##_;
-    PORTS(__define_signals)
-#undef __define_signals
-    Vgates_from_MUX2X1 uut_;
+  }
+  void m_checker() {
+    LIBTB2_ERROR_ON(fail_);
+  }
+  sc_core::sc_clock clk_;
+#define __declare_signals(__name, __type)       \
+  sc_core::sc_signal<__type> __name##_;
+  PORTS(__declare_signals)
+#undef __declare_signals
+  libtb2::Sampler sampler_;
+  libtb2::SimWatchDogCycles wd_;
+  uut_t uut_;
 };
 
-int sc_main(int argc, char **argv)
-{
-    using namespace libtb;
+SC_MODULE_EXPORT(GatesFromMUX2X1Tb);
 
-    return LibTbSim<GatesFromMux2X1Tb>(argc, argv).start();
+int sc_main(int argc, char ** argv) {
+  GatesFromMUX2X1Tb tb;
+  return libtb2::Sim::start(argc, argv);
 }

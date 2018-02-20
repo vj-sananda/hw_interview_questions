@@ -25,5 +25,4 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-hw_emit_legacy_sysc_answer(
-  tb_gates_from_MUX2X1 gates_from_MUX2X1.sv gates_from_MUX2X1.cpp)
+emit_answer(tb_gates_from_MUX2X1 gates_from_MUX2X1.sv gates_from_MUX2X1.cpp)
