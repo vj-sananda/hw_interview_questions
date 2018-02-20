@@ -25,6 +25,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
+`include "libtb2.vh"
+
 module latency #(parameter int W = 32)
 (
    //======================================================================== //
@@ -56,6 +58,7 @@ module latency #(parameter int W = 32)
    , output logic   [W-1:0]                  issue_cnt_r
    , output logic   [W-1:0]                  aggregate_cnt_r
 );
+  `include "libtb2_bdy.vh"
 
   typedef logic [W-1:0]                 w_t;
 

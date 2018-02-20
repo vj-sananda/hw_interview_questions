@@ -25,5 +25,5 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-hw_emit_legacy_sysc_answer(
+emit_answer(
   tb_multi_counter_variants multi_counter_variants.sv multi_counter_variants.cpp)

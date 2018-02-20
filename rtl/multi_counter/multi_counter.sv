@@ -25,6 +25,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //=========================================================================== //
 
+`include "libtb2.vh"
 `include "multi_counter_pkg.vh"
 
 module multi_counter #(
@@ -71,8 +72,8 @@ module multi_counter #(
   , output logic [CNTRS_ID_W-1:0]            status_id_r
   , output logic [CNTRS_W-1:0]               status_dat_r
 );
+`include "libtb2_bdy.vh"
 
-//  `include "libtb_tb_top_inc.vh"
    // ======================================================================= //
    //                                                                         //
    //  Signals                                                                //

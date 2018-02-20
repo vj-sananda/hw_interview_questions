@@ -187,7 +187,6 @@ private:
       const uint32_t expected_id = e.first;
       LIBTB2_ERROR_ON(actual_id != expected_id);
 
-      
       const uint32_t actual = status_dat_r_;
       const uint32_t expected = e.second;
 
@@ -215,6 +214,7 @@ private:
       cmd.dat = *dat;
       t_issue(cmd);
     }
+    wd_.pat();
     
     while (true) {
       cmd_c.next();
@@ -256,6 +256,7 @@ private:
   CmdTransactor cmdxactor_;
   uut_t uut_;
 };
+SC_MODULE_EXPORT(MultiCounterTb);
 
 int sc_main(int argc, char ** argv) {
   MultiCounterTb tb;
