@@ -25,73 +25,82 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-#include <libtb.h>
-#include <sstream>
+#include <libtb2.hpp>
 #include "vobj/Vfibonacci.h"
 
 #define PORTS(__func)                           \
     __func(y, uint32_t)
 
-struct FibonacciTb : libtb::TopLevel
-{
-    using UUT = Vfibonacci;
-    SC_HAS_PROCESS(FibonacciTb);
-    FibonacciTb(sc_core::sc_module_name mn = "t")
-        : uut_("uut")
-#define __construct_signal(__name, __type)      \
-        , __name##_(#__name)
-        PORTS(__construct_signal)
-#undef __construct_signal
-    {
-        SC_METHOD(m_checker);
-        dont_initialize();
-        sensitive << e_reset_done();
-
-        uut_.clk(clk());
-        uut_.rst(rst());
-#define __bind_signal(__name, __type)           \
-        uut_.__name(__name##_);
-        PORTS(__bind_signal)
-#undef __bind_signals
+template<typename T>
+struct Fibonacci {
+  Fibonacci() : a_(0), b_(1), ret_a_(true) {}
+  T operator()() {
+    T ret;
+    if (ret_a_) {
+      ret = a_;
+      a_ += b_;
+    } else {
+      ret = b_;
+      b_ += a_;
     }
-    bool run_test() {
-        wait(1, SC_US);
-        return true;
-    }
-    void m_checker() {
-        const uint32_t expected = step_fibonacci();
-        const uint32_t actual = y_;
-        if (actual != expected) {
-            std::stringstream ss;
-            ss << "Mismatch: "
-               << " actual=" << actual
-               << " expected=" << expected
-                ;
-            LIBTB_REPORT_ERROR(ss.str());
-        } else {
-            std::stringstream ss;
-            ss << "Validated " << actual;
-            LIBTB_REPORT_DEBUG(ss.str());
-        }
-        next_trigger(clk().posedge_event());
-    }
-    int step_fibonacci() {
-        const int ret = round_ ? f1_ : f0_;
-        (round_ ? f1_ : f0_) = f0_ + f1_;
-        round_ = !round_;
-        return ret;
-    }
-    int f0_{1}, f1_{1};
-    bool round_{false};
-#define __declare_signal(__name, __type)        \
-    sc_core::sc_signal<__type> __name##_;
-    PORTS(__declare_signal)
-#undef __declare_signal
-    UUT uut_;
+    ret_a_ = !ret_a_;
+    return ret;
+  }
+ private:
+  bool ret_a_;
+  T a_, b_;
 };
 
-int sc_main (int argc, char **argv)
-{
-    using namespace libtb;
-    return LibTbSim<FibonacciTb>(argc, argv).start();
+struct FibonacciTb : libtb2::Top<FibonacciTb> {
+  typedef Vfibonacci uut_t;
+  SC_HAS_PROCESS(FibonacciTb);
+  FibonacciTb(sc_core::sc_module_name mn = "t")
+      : uut_("uut") {
+    //
+    resetter_.clk(clk_);
+    resetter_.rst(rst_);
+    //
+    sampler_.clk(clk_);
+    //
+    wd_.clk(clk_);
+    //
+    uut_.clk(clk_);
+    uut_.rst(rst_);
+#define __bind_ports(__name, __type)            \
+    uut_.__name(__name ## _);
+    PORTS(__bind_ports)
+#undef __bind_ports
+    SC_METHOD(m_checker);
+    dont_initialize();
+    sensitive << resetter_.done();
+  }
+ private:
+  void m_checker() {
+    next_trigger(sampler_.sample());
+    
+    const uint32_t actual = y_;
+    const uint32_t expected = f_();
+
+    LOGGER(INFO) << " Actual = " << actual
+                 << " Expected = " << expected
+                 << "\n";
+    LIBTB2_ERROR_ON(actual != expected);
+  }
+  Fibonacci<uint32_t> f_;
+  sc_core::sc_clock clk_;
+  sc_core::sc_signal<bool> rst_;
+#define __declare_signal(__name, __type)        \
+  sc_core::sc_signal<__type> __name##_;
+  PORTS(__declare_signal)
+#undef __declare_signal
+  libtb2::Resetter resetter_;
+  libtb2::Sampler sampler_;
+  libtb2::SimWatchDogCycles wd_;
+  uut_t uut_;
+};
+SC_MODULE_EXPORT(FibonacciTb);
+
+int sc_main(int argc, char **argv) {
+  FibonacciTb tb;
+  return libtb2::Sim::start(argc, argv);
 }
