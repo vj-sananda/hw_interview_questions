@@ -27,3 +27,4 @@
 
 emit_answer(tb_fifo_multi_push fifo_multi_push.sv fifo_multi_push.cpp)
 
+add_test(NAME tb_fifo_multi_push COMMAND tb_fifo_multi_push)
