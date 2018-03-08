@@ -25,10 +25,8 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-#include <libtb.h>
-#include <vector>
+#include <libtb2.hpp>
 #include <deque>
-#include <sstream>
 #include "vobj/Vlinked_list_fifo.h"
 
 #define PORTS(__func)                           \
@@ -43,117 +41,151 @@
   __func(nempty_r, uint32_t)                    \
   __func(busy_r, bool)
 
-static constexpr int ID_N = 4;
-static constexpr int PTR_N = 255;
+const int ID_N = 4;
+const int PTR_N = 255;
 
-using namespace libtb;
-struct LinkedListFifoTb : libtb::TopLevel
-{
-  using UUT = Vlinked_list_fifo;
-  using IdT = uint32_t;
-  using DataT = uint32_t;
-  enum class OpT { PUSH, POP };
-  SC_HAS_PROCESS(LinkedListFifoTb);
-  LinkedListFifoTb(sc_core::sc_module_name mn = "t")
-    : uut_("uut") {
-    expected_.resize(4);
-    cnt_ = 0;
-    uut_.clk(clk());
-    uut_.rst(rst());
-#define __bind_signal(__name, __type)           \
-    uut_.__name(__name##_);
-    PORTS(__bind_signal)
-#undef __bind_signals
-  }
-  bool run_test() {
-    cmd_idle();
-    int ops = 10000;
-    std::vector<OpT> op(2);
-    while (ops > 0) {
-      t_wait_sync();
-      if (cnt_ == 0 && !empty_r_)
-        LIBTB_REPORT_ERROR("device should report empty.");
-      if (cnt_ != 0 && empty_r_)
-        LIBTB_REPORT_ERROR("device not should report empty.");
-      if (cnt_ == PTR_N && !full_r_)
-        LIBTB_REPORT_ERROR("device should report full.");
-      if (cnt_ != PTR_N && full_r_)
-        LIBTB_REPORT_ERROR("device should not report full.");
-      
-      op.clear();
-      const IdT id = random_integer_in_range(ID_N - 1);
-      if (cnt_ < PTR_N)
-        op.push_back(OpT::PUSH);
-      if (expected_[id].size())
-        op.push_back(OpT::POP);
+struct CmdXActorIntf : sc_core::sc_interface {
+  virtual void idle() = 0;
+  virtual void push(uint32_t id, uint32_t data) = 0;
+  virtual uint32_t pop(uint32_t id) = 0;
+};
 
-      if (op.size()) {
-        if (*choose_random(op.begin(), op.end()) == OpT::PUSH) {
-          ++cnt_;
-          cmd_push(id, random<DataT>());
-        } else {
-          --cnt_;
-          cmd_pop(id);
-        }
-        --ops;
-      }
-    }
-    return false;
-  }
-  void cmd_push(IdT id, DataT data) {
-    cmd_pass_ = true;
-    cmd_push_ = true;
-    cmd_id_ = id;
-    cmd_push_data_ = data;
-    expected_[id].push_back(data);
-    t_wait_posedge_clk();
-    cmd_idle();
-    t_wait_posedge_clk();
-  }
-  void cmd_pop(IdT id) {
-    DataT actual{};
-    cmd_pass_ = true;
-    cmd_push_ = false;
-    cmd_id_ = id;
-    t_wait_posedge_clk();
-    t_wait_sync();
-    actual = cmd_pop_data_;
-    if (expected_[id].size() == 0) {
-      LIBTB_REPORT_ERROR("Pop from empty queue!");
-    }
-    const DataT expected = expected_[id].front();
-    if (actual != expected) {
-      std::stringstream ss;
-      ss << "Mismatch:" << std::hex
-         << "expected " << expected << " actual " << actual;
-      LIBTB_REPORT_INFO(ss.str());
-    }
-    expected_[id].pop_front();
-    cmd_idle();
-    t_wait_posedge_clk();
+struct CmdXActor : CmdXactorIntf, sc_core::sc_module {
+  //
+  sc_core::sc_in<bool> clk_;
+  sc_core::sc_in<bool> rst_;
+  //
+  sc_core::sc_out<bool> cmd_pass_;
+  sc_core::sc_out<bool> cmd_push_;
+  sc_core::sc_out<uint32_t> cmd_id_;
+  sc_core::sc_out<uint32_t> cmd_push_data_;
+  sc_core::sc_in<uint32_t> cmd_pop_data_;
+  sc_core::sc_out<bool> clear_;
+  sc_core::sc_in<bool> full_r_;
+  sc_core::sc_in<bool> empty_r_;
+  sc_core::sc_in<uint32_t> nempty_r_;
+  sc_core::sc_in<bool> busy_r_;
 
-  }
-  void cmd_idle() {
+  CmdXActor(sc_core::sc_module_name mn = "t") { sampler_.clk(clk_); }
+  void idle() {
     cmd_pass_ = false;
     cmd_push_ = false;
     cmd_id_ = 0;
     cmd_push_data_ = 0;
   }
-  void clear() {
-    clear_ = true;
-    t_wait_posedge_clk();
-    clear_ = false;
+  bool is_full() {
+    sampler_.wait();
+    return full_r_;
   }
-  std::vector<std::deque<DataT>> expected_;
-  std::size_t cnt_;
+  uint32_t non_empty_id() {
+    sampler_.wait();
+    return libtb2::pickone(libtb2::mask_bits(nempty_r_.read(), ID_N));
+  }
+  uint32_t id() {
+    return 0;
+  }
+  bool is_empty(uint32_t id) {
+    sampler_.wait();
+    return empty_r_;
+  }
+  void push(uint32_t id, uint32_t data) {
+    cmd_pass_ = true;
+    cmd_push_ = true;
+    cmd_id_ = id;
+    cmd_push_data_ = data;
+    wait(cmd.posedge_event());
+    LOGGER(DEBUG) << "Push ID = " << id << " Push Data = " << data << "\n";
+    LIBTB_ERROR_ON(full_r_);
+    q_[id].push_back(data);
+    idle();
+  }
+  uint32_t pop(uint32_t id) {
+    cmd_pass_ = true;
+    cmd_push_ = true;
+    cmd_id_ = id;
+    wait(clk_.posedge_event());
+    wait(busy_r_.negedge_event());
+    sampler_.wait();
+    LOGGER(DEBUG) << "Pop ID = " << id << " Pop Data = " << cmd_pop_data << "\n";
+    LIBTB_ERROR_ON(q_[id].empty());
+    const uint32_t expected = q_[id].front(); q_[id].pop_front();
+    const uint32_t actual = cmd_pop_data_;
+    idle();
+    LIBTB2_ERROR_ON(expected != actual);
+    return actual;
+  }
+private:
+  std::deque<uint32_t> q_[ID_N];
+  libtb2::Sampler sampler_;
+};
+
+struct LinkedListFifoTb : libtb2::Top<LinkedListFifoTb> {
+  typedef Vlinked_list_fifo uut_t;
+  sc_core::sc_port<CmdXActorIntf> xact_;
+  SC_HAS_PROCESS(LinkedListFifoTb);
+  LinkedListFifoTb(sc_core::sc_module_name mn = "t")
+    : uut_("uut") {
+    //
+    resetter_.clk(clk_);
+    resetter_.rst(rst_);
+    //
+    sampler_.clk(clk_);
+    //
+    wd_.clk(clk_);
+    //
+    xact_.bind(x_);
+    //
+    x_.clk(clk_);
+    x_.rst(rst_);
+#define __bind_ports(__name, __type)            \
+    x_.__name(__name ## _);
+    PORTS(__bind_ports)
+#undef __bind_ports
+    //
+    uut_.clk(clk_);
+    uut_.rst(rst_);
+#define __bind_ports(__name, __type)            \
+    uut_.__name(__name ## _);
+    PORTS(__bind_ports)
+#undef __bind_ports
+    SC_THREAD(t_stimulus);
+  }
+private:
+  void t_stimulus() {
+    scv_smart_ptr<bool> ppush;
+    scv_smart_ptr<uint32_t> ppush_data;
+    
+    xact_->idle();
+    resetter_.wait();
+    while (true) {
+      ppush->next();
+      if (*ppush) {
+        ppush_data->next();
+
+        if (!xact_->is_full())
+          xact_->push(xact_->id(), *ppush_data);
+      } else {
+
+        if (!xact_->is_empty())
+          xact_->pop(xact_->non_empty_id());
+      }
+    }
+  }
+  CmdXActor x_;
+  sc_core::sc_clock clk_;
+  sc_core::sc_signal<bool> rst_;
 #define __declare_signal(__name, __type)        \
   sc_core::sc_signal<__type> __name##_;
   PORTS(__declare_signal)
 #undef __declare_signal
-  UUT uut_;
+  libtb2::Resetter resetter_;
+  libtb2::Sampler sampler_;
+  libtb2::SimWatchDogCycles wd_;
+  uut_t uut_;
 };
+SC_MODULE_EXPORT(LinkedListFifoTb);
 
-int sc_main(int argc, char **argv)
-{
-  return libtb::LibTbSim<LinkedListFifoTb>(argc, argv).start();
+int sc_main(int argc, char **argv) {
+  LinkedListFifoTb tb;
+  return libtb2::Sim::start(argc, argv);
 }

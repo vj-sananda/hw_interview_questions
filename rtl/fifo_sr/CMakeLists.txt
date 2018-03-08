@@ -25,4 +25,4 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-hw_emit_legacy_sysc_answer(tb_fifo_sr fifo_sr.sv fifo_sr.cpp)
+emit_answer(tb_fifo_sr fifo_sr.sv fifo_sr.cpp)
