@@ -35,11 +35,14 @@
   __func(cmd_id, uint32_t)                      \
   __func(cmd_push_data, uint32_t)               \
   __func(cmd_pop_data, uint32_t)                \
+  __func(cmd_pop_data_vld_r, bool)              \
   __func(clear, bool)                           \
   __func(full_r, bool)                          \
   __func(empty_r, bool)                         \
   __func(nempty_r, uint32_t)                    \
   __func(busy_r, bool)
+
+typedef Vlinked_list_fifo uut_t;
 
 const int ID_N = 4;
 const int PTR_N = 255;
@@ -47,76 +50,110 @@ const int PTR_N = 255;
 struct CmdXActorIntf : sc_core::sc_interface {
   virtual void idle() = 0;
   virtual void push(uint32_t id, uint32_t data) = 0;
+  virtual bool is_full() = 0;
+  virtual bool is_empty() = 0;
   virtual uint32_t pop(uint32_t id) = 0;
+  virtual uint32_t id()  = 0;
+  virtual uint32_t non_empty_id() = 0;
 };
 
-struct CmdXActor : CmdXactorIntf, sc_core::sc_module {
+struct CmdXActor : CmdXActorIntf, sc_core::sc_module {
   //
-  sc_core::sc_in<bool> clk_;
-  sc_core::sc_in<bool> rst_;
+  sc_core::sc_in<bool> clk;
+  sc_core::sc_in<bool> rst;
   //
-  sc_core::sc_out<bool> cmd_pass_;
-  sc_core::sc_out<bool> cmd_push_;
-  sc_core::sc_out<uint32_t> cmd_id_;
-  sc_core::sc_out<uint32_t> cmd_push_data_;
-  sc_core::sc_in<uint32_t> cmd_pop_data_;
-  sc_core::sc_out<bool> clear_;
-  sc_core::sc_in<bool> full_r_;
-  sc_core::sc_in<bool> empty_r_;
-  sc_core::sc_in<uint32_t> nempty_r_;
-  sc_core::sc_in<bool> busy_r_;
+  sc_core::sc_out<bool> cmd_pass;
+  sc_core::sc_out<bool> cmd_push;
+  sc_core::sc_out<uint32_t> cmd_id;
+  sc_core::sc_out<uint32_t> cmd_push_data;
+  sc_core::sc_in<uint32_t> cmd_pop_data;
+  sc_core::sc_in<bool> cmd_pop_data_vld_r;
+  sc_core::sc_out<bool> clear;
+  sc_core::sc_in<bool> full_r;
+  sc_core::sc_in<bool> empty_r;
+  sc_core::sc_in<uint32_t> nempty_r;
+  sc_core::sc_in<bool> busy_r;
 
-  CmdXActor(sc_core::sc_module_name mn = "t") { sampler_.clk(clk_); }
+  CmdXActor(sc_core::sc_module_name mn = "t")
+    : clk("clk"), rst("rst")
+#define __construct_ports(__name, __type)       \
+    , __name(#__name)
+    PORTS(__construct_ports)
+#undef __construct_ports
+  {
+    sampler_.clk(clk);
+  }
   void idle() {
-    cmd_pass_ = false;
-    cmd_push_ = false;
-    cmd_id_ = 0;
-    cmd_push_data_ = 0;
+    cmd_pass = false;
+    cmd_push = false;
+    cmd_id = 0;
+    cmd_push_data = 0;
   }
   bool is_full() {
-    sampler_.wait();
-    return full_r_;
+    sampler_.wait_for_sample();
+    return full_r;
   }
   uint32_t non_empty_id() {
-    sampler_.wait();
-    return libtb2::pickone(libtb2::mask_bits(nempty_r_.read(), ID_N));
+    sampler_.wait_for_sample();
+    return libtb2::pickone(libtb2::mask_bits(nempty_r.read(), ID_N)) - 1;
   }
   uint32_t id() {
-    return 0;
+    struct inrange_constraint : scv_constraint_base {
+      scv_smart_ptr<uint32_t> p;
+      SCV_CONSTRAINT_CTOR(inrange_constraint) {
+        SCV_CONSTRAINT((p() >= 0) && (p() < ID_N)); 
+      }
+    };
+    static inrange_constraint c("inrange_constraint");
+    c.next();
+    return *c.p;
   }
-  bool is_empty(uint32_t id) {
-    sampler_.wait();
-    return empty_r_;
+  bool is_empty() {
+    sampler_.wait_for_sample();
+    return empty_r;
   }
   void push(uint32_t id, uint32_t data) {
-    cmd_pass_ = true;
-    cmd_push_ = true;
-    cmd_id_ = id;
-    cmd_push_data_ = data;
-    wait(cmd.posedge_event());
+    LIBTB2_ERROR_ON(full_r);
+    cmd_pass = true;
+    cmd_push = true;
+    cmd_id = id;
+    cmd_push_data = data;
+    wait(clk.posedge_event());
     LOGGER(DEBUG) << "Push ID = " << id << " Push Data = " << data << "\n";
-    LIBTB_ERROR_ON(full_r_);
     q_[id].push_back(data);
     idle();
   }
   uint32_t pop(uint32_t id) {
-    cmd_pass_ = true;
-    cmd_push_ = true;
-    cmd_id_ = id;
-    wait(clk_.posedge_event());
-    wait(busy_r_.negedge_event());
-    sampler_.wait();
-    LOGGER(DEBUG) << "Pop ID = " << id << " Pop Data = " << cmd_pop_data << "\n";
-    LIBTB_ERROR_ON(q_[id].empty());
-    const uint32_t expected = q_[id].front(); q_[id].pop_front();
-    const uint32_t actual = cmd_pop_data_;
+    LIBTB2_ERROR_ON(q_[id].empty());
+    cmd_pass = true;
+    cmd_push = false;
+    cmd_id = id;
+    wait(clk.posedge_event());
     idle();
+
+    do {
+      sampler_.wait_for_sample();
+    } while (!cmd_pop_data_vld_r);
+
+    LOGGER(DEBUG) << "Pop ID = " << id << " Pop Data = " << cmd_pop_data << "\n";
+    const uint32_t expected = q_[id].front(); q_[id].pop_front();
+    const uint32_t actual = cmd_pop_data;
     LIBTB2_ERROR_ON(expected != actual);
     return actual;
   }
 private:
   std::deque<uint32_t> q_[ID_N];
   libtb2::Sampler sampler_;
+};
+
+enum OP { NOP, PUSH, POP };
+template<>
+struct scv_extensions<OP> : public scv_enum_base<OP> {
+  SCV_ENUM_CTOR(OP) {
+    SCV_ENUM(NOP);
+    SCV_ENUM(PUSH);
+    SCV_ENUM(POP);
+  }
 };
 
 struct LinkedListFifoTb : libtb2::Top<LinkedListFifoTb> {
@@ -151,23 +188,35 @@ struct LinkedListFifoTb : libtb2::Top<LinkedListFifoTb> {
     SC_THREAD(t_stimulus);
   }
 private:
+  
   void t_stimulus() {
-    scv_smart_ptr<bool> ppush;
     scv_smart_ptr<uint32_t> ppush_data;
     
     xact_->idle();
-    resetter_.wait();
+    resetter_.wait_reset_done();
     while (true) {
-      ppush->next();
-      if (*ppush) {
+      scv_bag<OP> op;
+      op.add(NOP, 10);
+      if (!xact_->is_full())
+        op.add(PUSH, 40);
+      if (!xact_->is_empty())
+        op.add(POP, 40);
+
+      scv_smart_ptr<OP> iop;
+      iop->set_mode(op);
+      iop->next();
+      switch (*iop) {
+      case NOP: {
+        wait(clk_.posedge_event());
+      } break;
+      case PUSH: {
         ppush_data->next();
+        xact_->push(xact_->id(), *ppush_data);
+      } break;
+      case POP: {
+        xact_->pop(xact_->non_empty_id());
+      } break;
 
-        if (!xact_->is_full())
-          xact_->push(xact_->id(), *ppush_data);
-      } else {
-
-        if (!xact_->is_empty())
-          xact_->pop(xact_->non_empty_id());
       }
     }
   }
