@@ -52,6 +52,7 @@ module doubly_linked_list
    , input   dll_pkg::word_t                 cmd_push_data
    //
    , output  dll_pkg::word_t                 cmd_pop_data
+   , output  logic                           cmd_pop_data_vld_r
    //
    , input                                   clear
    //
@@ -66,27 +67,45 @@ module doubly_linked_list
 
   `SPSRAM_SIGNALS(data_table_, $bits(word_t), $clog2(PTR_N));
 
+  //
   ptr_t                       cmd_push_ptr_r;
   ptr_t                       cmd_pop_ptr_w;
+  //
+  logic                       cmd_pop_data_vld_w;
 
   // ------------------------------------------------------------------------ //
   //
   always_comb
     begin : data_table_PROC
 
-      data_table_en    = cmd_pass;
-      data_table_wen   = (cmd_op == OP_PUSH_FRONT) || (cmd_op == OP_PUSH_BACK);
+      data_table_en       = cmd_pass;
+      data_table_wen      = (cmd_op == OP_PUSH_FRONT) || (cmd_op == OP_PUSH_BACK);
 
       // cmd_pop_ptr_w is some combinatorial function of cmd_id. This is a
       // fairly long path and may result in setup time violations for large data
       // tables. If this is the case, this may be trivally pipelined at the cost
       // of one additional cycle of latency.
       //
-      data_table_addr  = cmd_op [OP_PUSH_B] ? cmd_push_ptr_r : cmd_pop_ptr_w;
-      data_table_din   = cmd_push_data;
-      cmd_pop_data     = data_table_dout;
+      data_table_addr     = cmd_op [OP_PUSH_B] ? cmd_push_ptr_r : cmd_pop_ptr_w;
+      data_table_din      = cmd_push_data;
+      cmd_pop_data        = data_table_dout;
+      cmd_pop_data_vld_w  = data_table_en & (~data_table_wen);
 
     end // block: data_table_PROC
+
+  // ======================================================================== //
+  //                                                                          //
+  // Flops                                                                    //
+  //                                                                          //
+  // ======================================================================== //
+
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      cmd_pop_data_vld_r <= '0;
+    else
+      cmd_pop_data_vld_r <= cmd_pop_data_vld_w;
 
   // ======================================================================== //
   //                                                                          //
