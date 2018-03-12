@@ -43,7 +43,7 @@ struct IncrementTb : libtb2::Top<IncrementTb<T> > {
     uut_.__name(__name ## _);
     PORTS(__bind_ports)
 #undef __bind_ports
-    wd_.clk(clk_);
+      wd_.clk(clk_);
 
     SC_METHOD(m_fail);
     this->sensitive << fail_.posedge_event();

@@ -25,5 +25,4 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-hw_emit_legacy_sysc_answer(tb_zero_indices_slow
-  zero_indices_slow.sv zero_indices_slow.cpp)
+emit_answer(tb_zero_indices_slow zero_indices_slow.sv zero_indices_slow.cpp)
