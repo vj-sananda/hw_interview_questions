@@ -25,5 +25,4 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-hw_emit_legacy_sysc_answer(tb_clk_div_by_3
-  clk_div_by_3.sv clk_div_by_3.cpp)
+emit_answer(tb_clk_div_by_3 clk_div_by_3.sv clk_div_by_3.cpp)
