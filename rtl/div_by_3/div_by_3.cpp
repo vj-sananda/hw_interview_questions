@@ -25,7 +25,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-#include <libtb.h>
+#include <libtb2.hpp>
 #include <deque>
 #include "vobj/Vdiv_by_3.h"
 
@@ -36,92 +36,90 @@
   __func(valid_r, bool)                         \
   __func(y_r, uint32_t)
 
-struct DivBy3Tb : libtb::TopLevel
-{
-  struct Result {
-      uint32_t d, result;
-  };
+typedef Vdiv_by_3 uut_t;
 
-  using UUT = Vdiv_by_3;
+struct DivBy3Tb : libtb2::Top<DivBy3Tb> {
   SC_HAS_PROCESS(DivBy3Tb);
   DivBy3Tb(sc_core::sc_module_name mn = "t")
-    : uut_("uut")
-#define __construct_signal(__name, __type)      \
-      , __name##_(#__name)
-      PORTS(__construct_signal)
-#undef __construct_signal
+    : uut_("uut"), clk_("clk"), rst_("rst")
   {
+    //
+    resetter_.clk(clk_);
+    resetter_.rst(rst_);
+    //
+    wd_.clk(clk_);
+    sampler_.clk(clk_);
+    //
+    uut_.clk(clk_);
+    uut_.rst(rst_);
+#define __bind_ports(__name, __type)            \
+    uut_.__name(__name ## _);
+    PORTS(__bind_ports)
+#undef __bind_ports
+
+    SC_THREAD(t_stimulus);
     SC_METHOD(m_checker);
+    sensitive << sampler_.sample();
     dont_initialize();
-    sensitive << e_tb_sample();
-
-    uut_.clk(clk());
-    uut_.rst(rst());
-#define __bind_signal(__name, __type)           \
-    uut_.__name(__name##_);
-    PORTS(__bind_signal)
-#undef __bind_signals
   }
-  bool run_test()
-  {
-    t_wait_reset_done();
-    LIBTB_REPORT_INFO("Stimulus starts...");
-    int n = 10000;
-    while (n--) {
-        const uint32_t x = libtb::random_integer_in_range((1 << 15) - 1);
-        pass_ = true;
-        x_ = x;
-        t_wait_posedge_clk(1);
-        pass_ = false;
-        expected_.push_back(Result{x, x / 3});
+private:
+  void t_stimulus() {
+    struct x_constraint : scv_constraint_base {
+      scv_smart_ptr<uint32_t> p;
+      SCV_CONSTRAINT_CTOR(x_constraint) {
+        SCV_CONSTRAINT((p() >= 0) && (p() < (1 << 16) - 1));
+      }
+    } x_c("x_constraint");
 
-        // On each round, simply wait until the computation is complete to avoid
-        // exposing the TB to any flow-control.
-        //
-        t_wait_posedge_clk(10);
+    pass_ = false;
+    x_ = 0;
+
+    resetter_.wait_reset_done();
+    while (true) {
+      x_c.next();
+
+      const uint32_t x = *x_c.p;
+      q_.push_back(x / 3);
+
+      pass_ = true;
+      x_ = x;
+      wait(clk_.posedge_event());
+      pass_ = false;
+
+      if (!busy_r_)
+        wait(busy_r_.posedge_event());
+
+      while (busy_r_)
+        wait(clk_.posedge_event());
     }
-    t_wait_posedge_clk(10);
-    LIBTB_REPORT_INFO("Stimulus ends..");
-    return false;
   }
-
-  void m_checker()
-  {
+  void m_checker() {
     if (valid_r_) {
-      if (expected_.size() == 0) {
-        std::stringstream ss;
-        ss << "Unexpected result";
-        LIBTB_REPORT_ERROR(ss.str());
-        return;
-      }
-
       const uint32_t actual = y_r_;
-      const Result expected = expected_.front(); expected_.pop_front();
-      if (actual != expected.result) {
-        std::stringstream ss;
-        ss << "Mismatch detected: "
-           << " Oprand: " << expected.d
-           << " Actual: " << actual
-           << " Expected: " << expected.result;
-        LIBTB_REPORT_ERROR(ss.str());
-      } else {
-        std::stringstream ss;
-        ss << "Validated oprand=" << expected.d << " " << actual;
-        LIBTB_REPORT_DEBUG(ss.str());
-      }
+      const uint32_t expected = q_.front(); q_.pop_front();
+
+      // Account for rounding.
+      LIBTB2_ERROR_ON(std::abs(actual, expected) > 1);
+      LOGGER(INFO) << " Actual = " << actual
+                   << " Expected = " << expected
+                   << "\n";
     }
   }
-  std::deque<Result> expected_;
-#define __declare_signal(__name, __type)        \
-  sc_core::sc_signal<__type> __name##_;
-  PORTS(__declare_signal)
-#undef __declare_signal
-  UUT uut_;
+  std::deque<uint32_t> q_;
+  sc_core::sc_clock clk_;
+  sc_core::sc_signal<bool> rst_;
+#define __declare_signals(__name, __type)       \
+  sc_core::sc_signal<__type> __name ## _;
+  PORTS(__declare_signals)
+#undef __declare_signals
+  libtb2::Resetter resetter_;
+  libtb2::Sampler sampler_;
+  libtb2::SimWatchDogCycles wd_;
+  uut_t uut_;
 };
+SC_MODULE_EXPORT(DivBy3Tb);
 
-
-int sc_main(int argc, char **argv)
-{
-  using namespace libtb;
-  return LibTbSim<DivBy3Tb>(argc, argv).start();
+int sc_main(int argc, char **argv) {
+  DivBy3Tb tb;
+  return libtb2::Sim::start(argc, argv);
 }
