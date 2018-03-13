@@ -159,7 +159,7 @@ struct VendingMachineDpTb : libtb2::Top<VendingMachineDpTb> {
 #undef __declare_signals
   uut_t uut_;
 };
-
+SC_MODULE_EXPORT(VendingMachineDpTb);
 
 int sc_main (int argc, char **argv) {
   VendingMachineDpTb tb;

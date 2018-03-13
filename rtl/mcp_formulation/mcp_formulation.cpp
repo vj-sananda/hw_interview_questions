@@ -25,122 +25,127 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-#include <libtb.h>
+#include <libtb2.hpp>
 #include <deque>
-#include <sstream>
 #include "vobj/Vmcp_formulation.h"
 
 #define PORTS(__func)                           \
     __func(l_in_pass_r, bool)                   \
-    __func(l_in_r, WordT)                       \
+    __func(l_in_r, uint32_t)                    \
     __func(l_busy_r, bool)                      \
     __func(c_out_pass_r, bool)                  \
-    __func(c_out_r, WordT)
+    __func(c_out_r, uint32_t)
 
-struct MCPFormulationTb : libtb::TopLevel
-{
-    using WordT = uint32_t;
+typedef Vmcp_formulation uut_t;
 
-    SC_HAS_PROCESS(MCPFormulationTb);
-    MCPFormulationTb(sc_core::sc_module_name = "t")
-        : uut_("uut")
-        , rst2_("rst2_")
-        , clk2_period_(0.5, sc_core::SC_NS)
-        , clk2_("clk2", clk2_period_)
+struct McpFormulationTb : libtb2::Top<McpFormulationTb> {
+
+  SC_HAS_PROCESS(McpFormulationTb);
+  McpFormulationTb(sc_core::sc_module_name = "t")
+      : uut_("uut")
 #define __construct_signals(__name, __type)     \
-        , __name##_(#__name)
-          PORTS(__construct_signals)
+      , __name##_(#__name)
+      PORTS(__construct_signals)
 #undef __construct_signals
-    {
-        SC_METHOD(m_checker);
-        sensitive << e_tb_sample();
-        dont_initialize();
+  {
+    //
+    resetter_0_.clk(clk_0_);
+    resetter_0_.rst(rst_0_);
 
-        SC_THREAD(t_reset);
+    //
+    resetter_1_.clk(clk_1_);
+    resetter_1_.rst(rst_1_);
+    //
+    wd_.clk(clk_0_);
+    //
+    sampler_0_.clk(clk_0_);
+    sampler_1_.clk(clk_1_);
+    
+    SC_METHOD(m_checker);
+    sensitive << sampler_1_.sample();
+    dont_initialize();
 
-        uut_.l_clk(clk());
-        uut_.l_rst(rst());
-        uut_.c_clk(clk2_);
-        uut_.c_rst(rst2_);
+    uut_.l_clk(clk_0_);
+    uut_.l_rst(rst_0_);
+    uut_.c_clk(clk_1_);
+    uut_.c_rst(rst_1_);
 #define __bind_signals(__name, __type)          \
-        uut_.__name(__name##_);
-        PORTS(__bind_signals)
+    uut_.__name(__name##_);
+    PORTS(__bind_signals)
 #undef __bind_signals
+
+    SC_THREAD(t_stimulus);
+  }
+ private:
+  void t_stimulus() {
+    b_idle();
+
+    resetter_0_.wait_reset_done();
+    resetter_1_.wait_reset_done();
+    
+    LOGGER(INFO) << "Starting stimulus...\n";
+
+    scv_smart_ptr<uint32_t> p;
+    while (true) {
+      p->next();
+
+      const uint32_t actual = *p;
+       b_issue(actual);
     }
+    LOGGER(INFO) << "Stimulus ends.\n";
 
-    bool run_test() {
-        b_idle();
-        wait(reset_done_);
-        LIBTB_REPORT_INFO("Starting stimulus...");
-        for (int i = 0; i < N_; i++)
-            b_issue(libtb::random<WordT>());
-        LIBTB_REPORT_INFO("Stimulus ends.");
-        return false;
+    wait();
+  }
+
+  void b_idle() {
+    l_in_pass_r_ = false;
+    l_in_r_ = 0;;
+  }
+
+  void b_issue(const uint32_t & w) {
+    while (l_busy_r_)
+      wait(sampler_0_.sample());
+
+    l_in_pass_r_ = true;
+    l_in_r_ = w;
+    wait_cycles();
+    LOGGER(INFO) << "Launching: " << w << "\n";
+    queue_.push_back(w);
+    b_idle();
+  }
+
+  void m_checker() {
+    if (c_out_pass_r_) {
+      LIBTB2_ERROR_ON(queue_.size() == 0);
+
+      const uint32_t expected = queue_.front();
+      queue_.pop_front();
+      const uint32_t actual = c_out_r_;
+      LIBTB2_ERROR_ON(actual != expected);
+      LOGGER(INFO) << "Capturing: " << actual << "\n";
     }
+  }
 
-    void b_idle() {
-        l_in_pass_r_ = false;
-        l_in_r_ = WordT();
-    }
+  void wait_cycles(std::size_t cycles = 1) {
+    while (cycles--)
+      wait(clk_1_.posedge_event());
+  }
 
-    void b_issue(const WordT & w) {
-        do { t_wait_sync(); } while (l_busy_r_);
-
-        l_in_pass_r_ = true;
-        l_in_r_ = w;
-        t_wait_posedge_clk();
-        queue_.push_back(w);
-        b_idle();
-    }
-
-    void t_reset () {
-        rst2_ = false;
-        t_wait_reset_done();
-
-#define DO_WAIT_CLK2 wait(clk2_.posedge_event())
-        DO_WAIT_CLK2;
-        rst2_ = true;
-        DO_WAIT_CLK2;
-        rst2_ = false;
-#undef DO_WAIT_CLK2
-
-        reset_done_.notify();
-    }
-
-    void m_checker() {
-        if (c_out_pass_r_) {
-            if (queue_.size() == 0) {
-                LIBTB_REPORT_ERROR("Unexpected retirement");
-                return;
-            }
-            const WordT expected = queue_.front();
-            queue_.pop_front();
-            const WordT actual = c_out_r_;
-            if (actual != expected) {
-                std::stringstream ss;
-                ss << "Mismatch:"
-                   << " Expected=" << std::hex << expected
-                   << " Actual=" << std::hex << actual;
-                LIBTB_REPORT_ERROR(ss.str());
-            }
-        }
-    }
-
-    sc_core::sc_event reset_done_;
-    sc_core::sc_time  clk2_period_;
-    sc_core::sc_clock clk2_;
-    sc_core::sc_signal<bool> rst2_;
-    const int N_{10000};
-    std::deque<WordT> queue_;
+  std::deque<uint32_t> queue_;
+  libtb2::Resetter resetter_0_, resetter_1_;
+  libtb2::SimWatchDogCycles wd_;
+  libtb2::Sampler sampler_0_, sampler_1_;
+  sc_core::sc_clock clk_0_, clk_1_;
+  sc_core::sc_signal<bool> rst_0_, rst_1_;
 #define __declare_signals(__name, __type)       \
-    sc_core::sc_signal<__type> __name##_;
-    PORTS(__declare_signals)
+  sc_core::sc_signal<__type> __name##_;
+  PORTS(__declare_signals)
 #undef __declare_signals
-    Vmcp_formulation uut_;
+  uut_t uut_;
 };
+SC_MODULE_EXPORT(McpFormulationTb);
 
-int sc_main(int argc, char **argv)
-{
-    using namespace libtb;
-    return LibTbSim<MCPFormulationTb>(argc, argv).start();
+int sc_main(int argc, char **argv) {
+  McpFormulationTb tb;
+  return libtb2::Sim::start(argc, argv);
 }
