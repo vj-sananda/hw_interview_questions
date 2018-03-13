@@ -25,5 +25,4 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-hw_emit_legacy_sysc_answer(tb_vending_machine_dp
-  vending_machine_dp.sv vending_machine_dp.cpp)
+emit_answer(tb_vending_machine_dp vending_machine_dp.sv vending_machine_dp.cpp)

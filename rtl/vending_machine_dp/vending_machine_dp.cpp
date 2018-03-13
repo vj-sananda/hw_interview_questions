@@ -25,128 +25,144 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-#include <libtb.h>
+#include <libtb2.hpp>
 #include "vobj/Vvending_machine_dp.h"
 
 #define PORTS(__func)                           \
-    __func(client_nickel, bool)                 \
-    __func(client_dime, bool)                   \
-    __func(client_quarter, bool)                \
-    __func(client_dispense, bool)               \
-    __func(client_enough_r, bool)               \
-    __func(serve_done, bool)                    \
-    __func(serve_emit_irn_bru_r, bool)          \
-    __func(change_done, bool)                   \
-    __func(change_emit_dime_r, bool)
+  __func(client_nickel, bool)                   \
+  __func(client_dime, bool)                     \
+  __func(client_quarter, bool)                  \
+  __func(client_dispense, bool)                 \
+  __func(client_enough_r, bool)                 \
+  __func(serve_done, bool)                      \
+  __func(serve_emit_irn_bru_r, bool)            \
+  __func(change_done, bool)                     \
+  __func(change_emit_dime_r, bool)
 
-struct VendingMachineTb : libtb::TopLevel
-{
-    enum class CoinType {
-        NICKEL, DIME, QUARTER
-    };
+typedef Vvending_machine_dp uut_t;
 
-    using UUT = Vvending_machine_dp;
-    SC_HAS_PROCESS(VendingMachineTb);
-    VendingMachineTb(sc_core::sc_module_name mn = "t")
-        : uut_("uut")
+struct VendingMachineDpTb : libtb2::Top<VendingMachineDpTb> {
+  enum CoinType { NICKEL, DIME, QUARTER };
+
+  SC_HAS_PROCESS(VendingMachineDpTb);
+  VendingMachineDpTb(sc_core::sc_module_name mn = "t")
+      : uut_("uut")
 #define __construct_signals(__name, __type)     \
-          , __name##_(#__name)
-          PORTS(__construct_signals)
+        , __name##_(#__name)
+        PORTS(__construct_signals)
 #undef __construct_signals
-    {
-        SC_THREAD(t_emit_serve_done);
-        SC_THREAD(t_emit_change_done);
-        SC_THREAD(t_dispense);
+  {
+    //
+    resetter_.clk(clk_);
+    resetter_.rst(rst_);
+    //
+    wd_.clk(clk_);
+    sampler_.clk(clk_);
 
-        uut_.clk(clk());
-        uut_.rst(rst());
+    SC_THREAD(t_stimulus);
+    SC_THREAD(t_emit_serve_done);
+    SC_THREAD(t_emit_change_done);
+    SC_THREAD(t_dispense);
+
+    uut_.clk(clk_);
+    uut_.rst(rst_);
 #define __bind_signals(__name, __type)          \
-        uut_.__name(__name##_);
-        PORTS(__bind_signals)
+    uut_.__name(__name##_);
+    PORTS(__bind_signals)
 #undef __bind_signals
+  }
+ private:
+  void t_stimulus() {
+    LOGGER(INFO) << "Stimulus starts...\n";
+    test_0();
+    LOGGER(INFO) << "Stimulus ends\n";
+
+    wait();
+  }
+
+  void test_0() {
+    LOGGER(INFO) << "Test 0";
+    issue_coin(QUARTER);
+    issue_coin(QUARTER);
+    LOGGER(INFO) << "\tPass\n";
+
+    wait_cycles(100);
+  }
+
+  void issue_idle() {
+    client_nickel_ = false;
+    client_dime_ = false;
+    client_quarter_ = false;
+  }
+
+  void issue_coin(CoinType c) {
+    issue_idle();
+    client_nickel_ = (c == NICKEL);
+    client_dime_ = (c == DIME);
+    client_quarter_ = (c == QUARTER);
+    wait_cycles();
+    issue_idle();
+  }
+
+  void reset_change_count() { change_count_ = 0; }
+
+  void t_dispense() {
+
+    const int DLY = 2;
+    while (1) {
+      client_dispense_ = false;
+      wait(client_enough_r_.posedge_event());
+      wait_cycles(DLY);
+      client_dispense_ = true;
+      wait_cycles();
+      client_dispense_ = false;
     }
+  }
 
-    bool run_test() {
-        LIBTB_REPORT_INFO("Stimulus starts...");
-        test_0();
-        LIBTB_REPORT_INFO("Stimulus ends.");
-        return false;
+  void t_emit_change_done() {
+    const int DLY = 4;
+    while (1) {
+      change_done_ = false;
+      wait(change_emit_dime_r_.posedge_event());
+      wait_cycles(DLY);
+      change_count_++;
+      change_done_ = true;
+      wait_cycles();
     }
+  }
 
-    void test_0() {
-        LIBTB_REPORT_INFO("Test 0");
-        issue_coin(CoinType::QUARTER);
-        issue_coin(CoinType::QUARTER);
-
-        t_wait_posedge_clk(100);
+  void t_emit_serve_done() {
+    const int DLY = 3;
+    while (1) {
+      serve_done_ = false;
+      wait(serve_emit_irn_bru_r_.posedge_event());
+      wait_cycles(DLY);
+      serve_done_ = true;
+      wait_cycles();
     }
+  }
 
-    void issue_idle() {
-        client_nickel_ = false;
-        client_dime_ = false;
-        client_quarter_ = false;
-    }
+  void wait_cycles(std::size_t cycles = 1) {
+    while (cycles-- > 0)
+      wait(clk_.posedge_event());
+  }
 
-    void issue_coin(CoinType c) {
-        issue_idle();
-        client_nickel_ = (c == CoinType::NICKEL);
-        client_dime_ = (c == CoinType::DIME);
-        client_quarter_ = (c == CoinType::QUARTER);
-        t_wait_posedge_clk();
-        issue_idle();
-    }
-
-    void reset_change_count() { change_count_ = 0; }
-
-    void t_dispense() {
-
-        const int DLY = 2;
-        while (1) {
-            client_dispense_ = false;
-            wait(client_enough_r_.posedge_event());
-            for (int i = 0; i < DLY; i++)
-                t_wait_posedge_clk();
-            client_dispense_ = true;
-            t_wait_posedge_clk();
-            client_dispense_ = false;
-        }
-    }
-
-    void t_emit_change_done() {
-        const int DLY = 4;
-        while (1) {
-            change_done_ = false;
-            wait(change_emit_dime_r_.posedge_event());
-            for (int i = 0; i < DLY; i++)
-                t_wait_posedge_clk();
-            change_count_++;
-            change_done_ = true;
-            t_wait_posedge_clk();
-        }
-    }
-
-    void t_emit_serve_done() {
-        const int DLY = 3;
-        while (1) {
-            serve_done_ = false;
-            wait(serve_emit_irn_bru_r_.posedge_event());
-            for (int i = 0; i < DLY; i++)
-                t_wait_posedge_clk();
-            serve_done_ = true;
-            t_wait_posedge_clk();
-        }
-    }
-
-    unsigned change_count_{0};
+  std::size_t change_count_;
+  libtb2::Resetter resetter_;
+  libtb2::SimWatchDogCycles wd_;
+  libtb2::Sampler sampler_;
+  sc_core::sc_clock clk_;
+  sc_core::sc_signal<bool> rst_;
 #define __declare_signals(__name, __type)       \
-    sc_core::sc_signal<__type> __name##_;
-    PORTS(__declare_signals)
+  sc_core::sc_signal<__type> __name##_;
+  PORTS(__declare_signals)
 #undef __declare_signals
-    Vvending_machine_dp uut_;
+  uut_t uut_;
 };
 
-int sc_main (int argc, char **argv)
-{
-    using namespace libtb;
-    return LibTbSim<VendingMachineTb>(argc, argv).start();
+
+int sc_main (int argc, char **argv) {
+  VendingMachineDpTb tb;
+  return libtb2::Sim::start(argc, argv);
 }
+
