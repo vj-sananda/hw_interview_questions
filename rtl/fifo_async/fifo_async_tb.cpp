@@ -90,7 +90,7 @@ private:
     }
   }
   void t_push() {
-    wait(wresetter_.done());
+    wresetter_.wait_reset_done();
 
     scv_smart_ptr<bool> push;
     scv_smart_ptr<uint32_t> push_data;
@@ -116,7 +116,7 @@ private:
     }
   }
   void t_pop() {
-    wait(rresetter_.done());
+    rresetter_.wait_reset_done();
 
     scv_smart_ptr<bool> pop;
     while (true) {

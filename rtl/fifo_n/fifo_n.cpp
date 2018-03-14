@@ -87,7 +87,7 @@ private:
   }
   void t_pop() {
     pop_ = false;
-    wait(resetter_.done());
+    resetter_.wait_reset_done();
     scv_smart_ptr<bool> ppop;
     scv_bag<bool> pop_bag;
     pop_bag.add(true, 10);
@@ -132,7 +132,7 @@ private:
     push_bag.add(false, 70);
     ppush->set_mode(push_bag);
     
-    wait(resetter_.done());
+    resetter_.wait_reset_done();
     while (true) {
       wait(clk_.posedge_event());
       push_ = false;

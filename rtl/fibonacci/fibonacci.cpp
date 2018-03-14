@@ -70,21 +70,23 @@ struct FibonacciTb : libtb2::Top<FibonacciTb> {
     uut_.__name(__name ## _);
     PORTS(__bind_ports)
 #undef __bind_ports
-    SC_METHOD(m_checker);
-    dont_initialize();
-    sensitive << resetter_.done();
+    SC_METHOD(t_checker);
   }
  private:
-  void m_checker() {
-    next_trigger(sampler_.sample());
-    
-    const uint32_t actual = y_;
-    const uint32_t expected = f_();
+  void t_checker() {
+    resetter_.wait_reset_done();
 
-    LOGGER(INFO) << " Actual = " << actual
-                 << " Expected = " << expected
-                 << "\n";
-    LIBTB2_ERROR_ON(actual != expected);
+    while (true) {
+      wait(sampler_.sample());
+    
+      const uint32_t actual = y_;
+      const uint32_t expected = f_();
+
+      LOGGER(INFO) << " Actual = " << actual
+                   << " Expected = " << expected
+                   << "\n";
+      LIBTB2_ERROR_ON(actual != expected);
+    }
   }
   Fibonacci<uint32_t> f_;
   sc_core::sc_clock clk_;

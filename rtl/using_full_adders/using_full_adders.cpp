@@ -64,7 +64,7 @@ private:
   }
   void t_stimulus() {
     const libtb2::Options & o = libtb2::Sim::get_options();
-    wait(resetter_.done());
+    resetter_.wait_reset_done();
     scv_smart_ptr<T> x;
     while (true) {
       x->next();

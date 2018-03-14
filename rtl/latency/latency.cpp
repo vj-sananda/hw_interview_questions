@@ -65,7 +65,7 @@ struct LatencyTb : libtb2::Top<LatencyTb<T> > {
   }
 private:
   void t_stimulus() {
-    wait(resetter_.done());
+    resetter_.wait_reset_done();
 
     struct delay_constraint : scv_constraint_base {
       scv_smart_ptr<std::size_t> p;

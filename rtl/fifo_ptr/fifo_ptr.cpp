@@ -174,7 +174,7 @@ struct FifoPtrTb : libtb2::Top<FifoPtrTb<T> > {
   void t_push() {
     scv_smart_ptr<T> d;
 
-    wait(resetter_.done());
+    resetter_.wait_reset_done();
     while (true) {
       if (!push_intf_->is_full()) {
         d->next();
@@ -189,7 +189,7 @@ struct FifoPtrTb : libtb2::Top<FifoPtrTb<T> > {
   void t_pop() {
     const libtb2::Options & o = libtb2::Sim::get_options();
 
-    wait(resetter_.done());
+    resetter_.wait_reset_done();
     while (true) {
       if (!pop_intf_->is_empty()) {
         LIBTB2_ASSERT(!expected_.empty());

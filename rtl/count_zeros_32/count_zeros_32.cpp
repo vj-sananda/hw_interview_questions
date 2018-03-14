@@ -87,7 +87,7 @@ private:
     }
   }
   void t_stimulus() {
-    wait(resetter_.done());
+    resetter_.wait_reset_done();
 
     scv_smart_ptr<T> p;
     while (true) {

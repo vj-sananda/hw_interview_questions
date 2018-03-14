@@ -65,7 +65,7 @@ struct MissingDuplicateWordTb : libtb2::Top<MissingDuplicateWordTb> {
   }
 private:
   void t_stimulus() {
-    wait(resetter_.done());
+    resetter_.wait_reset_done();
 
     cntrl_start_ = false;
     while (true) {

@@ -117,7 +117,7 @@ struct FifoMultiPushTb : libtb2::Top<FifoMultiPushTb> {
   }
 private:
   void t_pop() {
-    wait(resetter_.done());
+    resetter_.wait_reset_done();
 
     scv_smart_ptr<bool> pop;
     while (true) {
@@ -141,7 +141,7 @@ private:
     }
   }
   void t_stimulus() {
-    wait(resetter_.done());
+    resetter_.wait_reset_done();
 
     FifoMultiPushCmdConstraint c("FifoMultiPushCmdConstraint");
     while (true) {

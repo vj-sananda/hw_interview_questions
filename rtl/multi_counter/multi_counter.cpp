@@ -144,7 +144,7 @@ struct MultiCounterMdl {
 
 struct MultiCounterTb : libtb2::Top<MultiCounterTb> {
   sc_core::sc_port<CmdTransactorIntf> cmdintf;
-  p
+
   SC_HAS_PROCESS(MultiCounterTb);
   MultiCounterTb(sc_core::sc_module_name mn = "t")
       : uut_("uut"), cmdxactor_("CmdXActor") {

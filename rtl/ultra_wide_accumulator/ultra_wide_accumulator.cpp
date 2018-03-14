@@ -96,7 +96,7 @@ private:
   void t_stimulus() {
     const libtb2::Options & o = libtb2::Sim::get_options();
 
-    wait(resetter_.done());
+    resetter_.wait_reset_done();
 
     struct x_constraint : scv_constraint_base {
       scv_smart_ptr<rtl_word_t> w;

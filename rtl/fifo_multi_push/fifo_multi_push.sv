@@ -426,7 +426,7 @@ module fifo_multi_push #(parameter int W = 32, parameter int N = 8) (
     //
       .x                 (push_vec                     )
     //
-    , .y                 (fifo_n_dec_t'(push_vec_cnt)  )
+    , .y                 (push_vec_cnt                 )
   );
 
   // ------------------------------------------------------------------------ //
@@ -434,7 +434,7 @@ module fifo_multi_push #(parameter int W = 32, parameter int N = 8) (
   rotate #(.W(FIFO_N)) u_rotate_push (
     //
       .x                 (push_idx_1h_r                )
-    , .n                 (fifo_n_dec_t'(push_vec_cnt)  )
+    , .n                 (push_vec_cnt                 )
     //
     , .y                 (push_idx_1h_w                )
   );

@@ -62,7 +62,7 @@ private:
   void t_stimulus() {
     scv_smart_ptr<bool> in;
 
-    wait(resetter_.done());
+    resetter_.wait_reset_done();
     while (true) {
       in->next();
 

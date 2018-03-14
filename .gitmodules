@@ -1,6 +1,3 @@
-[submodule "contrib/libtb"]
-	path = contrib/libtb
-	url = https://github.com/stephenry/libtb.git
 [submodule "contrib/libv2"]
 	path = contrib/libv2
 	url = git@github.com:stephenry/libv2.git

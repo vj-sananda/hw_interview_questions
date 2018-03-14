@@ -81,6 +81,7 @@ module sorted_lists
    , output logic   [31:0]                   qry_size_r
    , output logic                            qry_error_r
    , output logic   [7:0]                    qry_listsize_r
+   , output logic   [5:0]                    qry_id_r
 
    //======================================================================== //
    //                                                                         //
@@ -177,6 +178,7 @@ module sorted_lists
   size_t                                qry_size_w;
   logic                                 qry_error_w;
   listsize_t                            qry_listsize_w;
+  id_t                                  qry_id_w;
   //
   logic                                 ntf_vld_w;
   id_t                                  ntf_id_w;
@@ -195,7 +197,7 @@ module sorted_lists
   //
   n_d_t                                 ucode_upt_2_t_vld;
   n_d_t                                 ucode_upt_3_t_vld;
-  logic [$clog2(N)-1:0]                 ucode_upt_3_t_popcnt;
+  logic [$clog2(N):0]                   ucode_upt_3_t_popcnt;
   n_t                                   vld_not_set_e;
   n_d_t                                 ucode_upt_2_t_hit;
   n_t                                   hit_e;
@@ -206,7 +208,7 @@ module sorted_lists
   //
   table_state_t                         ucode_qry_X_sorted_r;
   n_d_t                                 ucode_qry_X_valid;
-  logic [$clog2(N)-1:0]                 ucode_qry_X_valid_popcnt;
+  logic [$clog2(N):0]                   ucode_qry_X_valid_popcnt;
   entry_t                               ucode_qry_X_entry;
   //
   table_state_t                         ucode_upt_2_t_fwd;
@@ -411,10 +413,14 @@ module sorted_lists
 `endif
         3'b01?:  ucode_upt_2_w.t  = ucode_upt_3_r.t;
         3'b001:  ucode_upt_2_w.t  = upt_table_wrbk_r;
-        default: ucode_upt_2_w.t  = upt_table_dout1;
+        default: ucode_upt_2_w.t  = upt_table_dout0;
       endcase // casez ({})
-    end
 
+      //
+      upt_error_vld_w  = upt_pipe_vld_r [3] & ucode_upt_3_r.error;
+      upt_error_id_w   = ucode_upt_3_r.u.id;
+      
+    end // block: update_pipe_PROC
 
   // ------------------------------------------------------------------------ //
   //
@@ -451,7 +457,7 @@ module sorted_lists
 
       //
       ucode_qry_2_w        = ucode_qry_1_r;
-      ucode_qry_2_w.t      = qry_table_dout1;
+      ucode_qry_2_w.t      = qry_table_dout0;
 
       //
       qry_delay_pipe_in    = '{qry_pipe_vld_r [2],
@@ -482,6 +488,7 @@ module sorted_lists
       qry_size_w           = ucode_qry_X_entry.size;
       qry_error_w          = (~ucode_qry_X_entry.vld);
       qry_listsize_w       = listsize_t'(ucode_qry_X_valid_popcnt);
+      qry_id_w             = qry_delay_pipe_out_r.id;
 
     end // block: qry_pipe_PROC
 
@@ -513,7 +520,7 @@ module sorted_lists
 
       // WR port
       //
-      upt_table_en1         = upt_pipe_vld_r [3];
+      upt_table_en1         = upt_pipe_vld_r [3] & (~ucode_upt_3_r.error);
       upt_table_wen1        = '1;
       upt_table_addr1       = ucode_upt_3_r.u.id;
       upt_table_din1        = ucode_upt_3_r.t;
@@ -610,6 +617,7 @@ module sorted_lists
       qry_size_r     <= qry_size_w;
       qry_error_r    <= qry_error_w;
       qry_listsize_r <= qry_listsize_w;
+      qry_id_r       <= qry_id_w;
     end
 
 
