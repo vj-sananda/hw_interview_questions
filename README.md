@@ -1,19 +1,21 @@
 # Hardware Interview Questions
 
-[![Build Status](https://travis-ci.org/stephenry/hw_interview_questions.svg?branch=master)](https://travis-ci.org/stephenry/hw_interview_questions)
-
 ## Introduction
 
-This project presents solutions to common hardware design/VLSI interview
-questions. Presented are SystemVerilog implementations alongside self-checking
-verification environments. Thorough discussion on the elements saught by
-interviewer in a candidates solution provided.
+This repository contains a collection of commonly asked VLSI/RTL
+interview questions. Solutions are presented as fully synthesizable
+System Verilog along with a fully self-checking SystemC/SCV
+verification environment.
+
+Important reminder: these are not necessarily questions I myself ask,
+or have been asked in the past and any references of companies is
+purely coincidental.
 
 ## System Requirements
 * cmake >= 3.2
 * systemc >= 2.3.1
+* scv >= 2.0
 * verilator >= 3.9
-* clang >= 3.9
 
 ## Build Steps (SIM)
 ~~~~
@@ -23,7 +25,13 @@ git submodule update --init --recursive
 mkdir build
 cd build
 cmake ../
-make
+make -j
+~~~~
+
+## Test Steps
+From the build directory, a full regression can be run using:
+~~~~
+ctest .
 ~~~~
 
 ## PD (VIVADO)
@@ -37,48 +45,92 @@ cmake ../ -DTARGET_VIVADO
 make vivado
 ~~~~
 
-## Run Steps
-Upon successful completion of the build process. Tests can be executed by
-invoking the generated executable in the RTL directory.
+## Discussion
 
-## Answers
-* __count_ones__ Answer to compute the population count of an input vector.
-* __fifo_async__ Answer to demonstrate the construction of a standard
-  asynchronous FIFO.
-* __fifo_n__ Answer to construct N-statically sized FIFO from a single
-  dual-ported, synchronous SRAM.
-* __fifo_sr__ Answer to implement a shift-register FIFO in a power efficient
-  manner.
-* __fifo_ptr__ Answer to implement a ptr-based FIFO.
-* __gates_from_MUX2X1__ Answer to derive AND, OR, XOR and INV logic gates from a
-  MUX2X standard cell.
-* __increment__ Answer to derive logic to compute an increment function.
-* __latency__ Answer to compute the average latency of a command stream to and
-  from some external agent.
-* __multi_counter__ Answer to demonstrate basic forwarding and pipeline
-  concepts. Multiple counters are retained in a central state table. They are
-  then randomly incremented or decremented on demand.
-* __multi_counter_variant__ Alternate solutions to multi_counter problem.
-* __one_or_two__ Answer to detect whether for an arbitrary input vector, 0-bits
-  are set, 1-bit is set, or greater than 1 bit is set.
-* __mcp_formulation (Multi-Cycle Path Formulation)__ Answer to pass a vector
-  between two clock domains using a multi-cycle path.
-* __detect_sequence__ Answer to detect a given sequence within an input
-  serial stream.
-* __vending_machine_fsm__ Answer to design a FSM to emulate the behavior of a
-  simple vending machine.
-* __vending_machine_dp__ Variant of FSM solution whereby some accumulation of a
-  running count is required before an IRN-BRU shall be emitted.
-* __clk_div_by_3__ Divide a clock by an odd number while retaining a 50% duty
-  cycle.
-* __missing_duplicated_word__ Answer to detect the value of a non-duplicated
-  integer in a state table containing duplicated entries.
-* __multiply_by_21__ Answer to demonstrate how a constant value can be
-  efficiently multiplied against a randomized vector.
-* __simd__ Answer to construct a 32b SIMD ALU
-* __linked_list_fifo__ Answer to construct a Linked List Queue with N-contexts
+The solutions presents herein are commonly seen questions during
+hardware/RTL interviews. They are generally poised to test a
+candidates knowledge of design, logic and RTL. Admittedly, some
+questions are somewhat arbitrary rely upon lesser known tricks of the
+trade that, although useful in the context of an intervew, are perhaps
+irrelevant for day-to-day roles.
 
-## Disclaimer
-Contributions are welcome however please consider that the current project
-remains very much a work in progress and that ancillary libraries, upon which
-this code depends, remain under active development.
+## Problems
+
+### Design
+
+* sorted_lists
+* vending_machine_fsm
+* vending_machine_dp
+
+### General Logic
+
+* one_or_two
+* multi_counter
+* multi_counter_variants
+* gates_from_MUX2X1
+* count_ones
+* detect_sequence
+* missing_duplicated_word
+* zero_indices_slow
+* zero_indices_fast
+* count_zeros_32
+* fibonacci
+
+### Arithmetic
+
+* increment
+* multiply_by_21
+* ultra_wide_accumulator
+* fused_multiply_add
+* simd
+* div_by_3
+
+### Clocking
+
+* mcp_formulation
+* clk_div_by_3
+
+### General Problem Solving
+
+* latency
+* using_full_adders
+
+### Queues
+
+* fifo_async
+* fifo_multi_push
+* fifo_n
+* fifo_sr
+* fifo_ptr
+* linked_list_fifo
+* doubly_linked_list
+
+## Noteworthy mentions
+
+### sorted_lists
+
+The 'sorted_lists' solution presents an implementation of a fairly
+complex design problem: A machine maintains N contexts, each context
+contains an ordered list of key/value pairs. On alternating cycles,
+key/value pairs can be added, removed, deleted, changed. At the same
+time, any list can be queried to find the n'th largest element in the
+context, at a rate of upto 1 query per cycle. Additionally, any
+solution must run at around 200 MHz on an FPGA.
+
+### linked_list_fifo
+
+An implementation of a N-context singly, linked list FIFO.
+
+### fifo_async
+
+An implementation of a standard asynchronous FIFO. This in particular
+is a very common interview question and, although very common in
+industry, presents a number of very small, fine details that very
+often go unnoted.
+
+### SIMD
+
+An implementation of a Single-Instruction, Multiple-Data ALU. This is
+quite straight-forward conceptually, however there are a few
+interesting details/tricks that can be applied to facilitate an
+efficient and fast implementation in silicon.
