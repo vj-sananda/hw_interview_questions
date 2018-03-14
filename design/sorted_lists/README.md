@@ -82,5 +82,3 @@ key optimizations
   lengthy comparison, 64b subtraction, and may therefore be
   slow. There are no requirements on latency, therefore pipeline is
   applied.
-
-# Commentary

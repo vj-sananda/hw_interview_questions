@@ -1,9 +1,3 @@
-# Origin
-
-# Company
-
-Apple
-
 # Problem Statement
 
 Commands are issued to some agent. Reponses return from the agent after some

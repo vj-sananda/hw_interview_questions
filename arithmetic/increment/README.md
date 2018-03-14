@@ -1,9 +1,7 @@
-# Increment
-
 # Question
 
-Derive code to detect the first 0 in an input vector and to invert it, and all
-preceding bits. What function does the logic perform?
+Derive code to detect the first 0 in an input vector and to invert it,
+and all preceding bits. What function does the logic perform?
 
 # Commentary
 

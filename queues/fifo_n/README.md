@@ -1,11 +1,3 @@
-# Origin
-
-Unknown
-
-# Company
-
-Unknown
-
 # Problem Statement
 
 From a dual-ported synchronous SRAM macro, carve N-statically sized

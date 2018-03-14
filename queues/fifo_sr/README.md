@@ -1,9 +1,3 @@
-# Origin
-
-# Company
-
-N/A
-
 # Problem Statement
 
 Construct a N-depth Queue of W-width using a shift-register
@@ -17,4 +11,4 @@ operation, all state in registers is shifted one step. Although
 trivial, the unnecessary data movement results in increased power
 consumption. Instead, the same effect can be realized by using a 1h
 read/write strobe pointer into a static flop array. Clocks to the flop
-array are gated for except when being written. 
+array are gated for except when being written.

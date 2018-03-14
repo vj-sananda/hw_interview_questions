@@ -1,7 +1,3 @@
-# Company
-
-Fungible/Google
-
 # Problem
 
 Design and implement a unit can maintains N-ordered queues as a singly
@@ -9,8 +5,8 @@ linked list.
 
 # Commentary
 
-Singly linked lists are commonly used in networking applications
-where multiple queues must be maintained for differing and independent
+Singly linked lists are commonly used in networking applications where
+multiple queues must be maintained for differing and independent
 contexts and the load across individual queues is not balanced for all
 traffic flows. In this case, it would otherwise be necessary to size
 each individual queue to the worst case, whether used or not. A

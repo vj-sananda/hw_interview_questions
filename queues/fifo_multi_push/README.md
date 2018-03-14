@@ -1,11 +1,3 @@
-# Origin
-
-Unknown
-
-# Company
-
-Unknown
-
 # Problem Statement
 
 Queue data structures are well-known. Construct a N-Queue data

@@ -1,17 +1,11 @@
-# Origin
-
-# Company
-
-Google
-
 # Problem
 
-Maintain a set of counters that can be incremented, decremented of initialized
-based upon in incoming command.
+Maintain a set of counters that can be incremented, decremented of
+initialized based upon in incoming command.
 
 # Commentary
 
-There are multiple possible solutions to the question as posed each
+There are multiple possible solutions to the question as posed, each
 varying in complexity. The correct solution largely depends upon the
 counter count and desired clock frequency.
 
@@ -26,14 +20,14 @@ Three solutions are presented:
   the initial state lookup and 2) the consequent writeback to the
   state table. In 1) there is an N-to-1 mux, in 2) there is a O(N)
   fan-out at the output of the adder/subtractor. By consequence of
-  this, the propose solution perhaps suffers from lower overall
+  this, the proposed solution perhaps suffers from lower overall
   achievable clock frequency and may not be scalable to large N.
 
 * __Multiple Engines__
 
-  The second approach is to, similarly, maintain state in flops but
-  replicate state update logic with each context. At the cost of some
-  area overhead, the solution presented can be scaled to a larger N
+  The second approach is to maintain state in flops but replicate
+  state update logic with each context. At the cost of some area
+  overhead, the solution presented can be scaled to a larger N
   although there remains some fan-out issues on the command interface
   and on the output MUX.
 

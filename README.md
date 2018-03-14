@@ -8,8 +8,8 @@ System Verilog along with a fully self-checking SystemC/SCV
 verification environment.
 
 Important reminder: these are not necessarily questions I myself ask,
-or have been asked in the past and any references of companies is
-purely coincidental.
+or may have been asked in the past, and any mention of any company
+names is purely speculative.
 
 ## System Requirements
 * cmake >= 3.2

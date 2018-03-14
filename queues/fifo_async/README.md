@@ -24,7 +24,3 @@ wrong. Applying a standard synchronizing approach to the GRAY cone can result in
 invalid values. This is by consequence of the differing settling times and skew
 at each GRAY wire. The solution is to FLOP the computed GRAY code using the
 LAUNCH clock before it is passed to the CAPTURING clocks resynchronizer.
-
-## NOTE:
-Apparently, Qualcomm had to respin a chip after the additional GRAY flop was
-omitted from a asynchronous FIFO used throughout the chip.
