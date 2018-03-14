@@ -4,8 +4,8 @@
 
 This repository contains a collection of commonly asked VLSI/RTL
 interview questions. Solutions are presented as fully synthesizable
-System Verilog along with a fully self-checking SystemC/SCV
-verification environment.
+System Verilog along with fully self-checking SystemC/SCV
+verification environments.
 
 Important reminder: these are not necessarily questions I myself ask,
 or may have been asked in the past, and any mention of any company
