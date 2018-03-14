@@ -25,33 +25,13 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-cmake_minimum_required(VERSION 3.5)
-project(hw_interview_questions)
-
-set(LIBTB2_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/contrib/libtb2/)
-include(${LIBTB2_ROOT}/cmake/libtb2.cmake)
-
-include_directories(${CMAKE_SOURCE_DIR}/contrib/libtb/src)
-
-macro(emit_answer target answer_sv answer_cc)
-  message(STATUS "Emit soluion: ${target}")
-  libtb2_add_include_path(${CMAKE_CURRENT_SOURCE_DIR})
-  libtb2_add_include_path(${CMAKE_CURRENT_BINARY_DIR})
-  get_filename_component(answer ${answer_sv} NAME_WE)
-  libtb2_verilate_sc(verilate_${target} ${answer} vlib)
-  add_executable(${target} ${answer_cc})
-  add_dependencies(${target} verilate_${target}) 
-  target_include_directories(${target} PUBLIC
-    ${LIBTB_ROOT}/src
-    ${CMAKE_CURRENT_BINARY_DIR}
-    )
-  target_link_libraries(${target} tb2 systemc scv ${vlib} vcom)
-endmacro()
-
-add_subdirectory(contrib)
-add_subdirectory(design)
-add_subdirectory(general)
-add_subdirectory(arithmetic)
-add_subdirectory(clocking)
-add_subdirectory(problem_solving)
-add_subdirectory(queues)
+add_subdirectory(count_ones)
+add_subdirectory(count_zeros_32)
+add_subdirectory(detect_sequence)
+add_subdirectory(fibonacci)
+add_subdirectory(missing_duplicated_word)
+add_subdirectory(multi_counter)
+add_subdirectory(multi_counter_variants)
+add_subdirectory(one_or_two)
+add_subdirectory(zero_indices_slow)
+add_subdirectory(zero_indices_fast)

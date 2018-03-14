@@ -67,7 +67,6 @@ irrelevant for day-to-day roles.
 * one_or_two
 * multi_counter
 * multi_counter_variants
-* gates_from_MUX2X1
 * count_ones
 * detect_sequence
 * missing_duplicated_word
@@ -81,7 +80,7 @@ irrelevant for day-to-day roles.
 * increment
 * multiply_by_21
 * ultra_wide_accumulator
-* fused_multiply_add
+fi* fused_multiply_add
 * simd
 * div_by_3
 
@@ -94,6 +93,7 @@ irrelevant for day-to-day roles.
 
 * latency
 * using_full_adders
+* gates_from_MUX2X1
 
 ### Queues
 
