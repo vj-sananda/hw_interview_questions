@@ -142,7 +142,6 @@ struct CmdXActor : CmdXActorIntf, sc_core::sc_module {
     
     do { sampler_.wait_for_sample(); } while (!cmd_pop_data_vld_r);
     const uint32_t actual = cmd_pop_data;
-    std::cout << "POP_FRONT ID=" << id << "\n";
     const uint32_t expected = q_[id].front(); q_[id].pop_front();
     LIBTB2_ERROR_ON(actual != expected);
 
@@ -171,7 +170,6 @@ struct CmdXActor : CmdXActorIntf, sc_core::sc_module {
 
     do { sampler_.wait_for_sample(); } while (!cmd_pop_data_vld_r);
     const uint32_t actual = cmd_pop_data;
-    std::cout << "POP_BACK ID=" << id << "\n";
     const uint32_t expected = q_[id].back(); q_[id].pop_back();
     LIBTB2_ERROR_ON(actual != expected);
 

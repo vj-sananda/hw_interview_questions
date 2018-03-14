@@ -26,3 +26,6 @@
 ##========================================================================== //
 
 emit_answer(tb_latency latency.sv latency.cpp)
+
+add_test(NAME tb_latency_0 COMMAND tb_latency --seed=1)
+add_test(NAME tb_latency_1 COMMAND tb_latency --seed=2)

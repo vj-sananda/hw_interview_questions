@@ -70,7 +70,7 @@ struct FibonacciTb : libtb2::Top<FibonacciTb> {
     uut_.__name(__name ## _);
     PORTS(__bind_ports)
 #undef __bind_ports
-    SC_METHOD(t_checker);
+    SC_THREAD(t_checker);
   }
  private:
   void t_checker() {

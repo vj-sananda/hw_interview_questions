@@ -26,3 +26,5 @@
 ##========================================================================== //
 
 emit_answer(tb_div_by_3 div_by_3.sv div_by_3.cpp)
+
+add_test(NAME tb_div_by_3 COMMAND tb_div_by_3 --seed=1)

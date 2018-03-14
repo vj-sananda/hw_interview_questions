@@ -80,7 +80,7 @@ irrelevant for day-to-day roles.
 * increment
 * multiply_by_21
 * ultra_wide_accumulator
-fi* fused_multiply_add
+* fused_multiply_add
 * simd
 * div_by_3
 
