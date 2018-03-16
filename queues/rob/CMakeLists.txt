@@ -1,5 +1,5 @@
 ##========================================================================== //
-## Copyright (c) 2016-2018, Stephen Henry
+## Copyright (c) 2016, Stephen Henry
 ## All rights reserved.
 ##
 ## Redistribution and use in source and binary forms, with or without
@@ -25,11 +25,11 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-add_subdirectory(fifo_async)
-add_subdirectory(fifo_multi_push)
-add_subdirectory(fifo_n)
-add_subdirectory(fifo_sr)
-add_subdirectory(fifo_ptr)
-add_subdirectory(linked_list_fifo)
-add_subdirectory(doubly_linked_list)
-add_subdirectory(rob)
+emit_answer(tb_rob rob.sv rob.cpp)
+
+add_test(NAME tb_rob_0 COMMAND tb_rob --seed=1)
+add_test(NAME tb_rob_1 COMMAND tb_rob --seed=2)
+add_test(NAME tb_rob_2 COMMAND tb_rob --seed=3)
+add_test(NAME tb_rob_3 COMMAND tb_rob --seed=4)
+add_test(NAME tb_rob_4 COMMAND tb_rob --seed=5)
+

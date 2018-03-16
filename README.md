@@ -104,6 +104,7 @@ irrelevant for day-to-day roles.
 * fifo_ptr
 * linked_list_fifo
 * doubly_linked_list
+* rob
 
 ## Noteworthy mentions
 
