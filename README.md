@@ -129,9 +129,14 @@ is a very common interview question and, although very common in
 industry, presents a number of very small, fine details that very
 often go unnoted.
 
-### SIMD
+### Single-Instruction, Multiple-Data (SIMD)
 
 An implementation of a Single-Instruction, Multiple-Data ALU. This is
 quite straight-forward conceptually, however there are a few
 interesting details/tricks that can be applied to facilitate an
 efficient and fast implementation in silicon.
+
+## Re-Order Buffer (ROB)
+
+An implementation of a standard reorder buffer with additional memory
+to retain allocation and completion state.
