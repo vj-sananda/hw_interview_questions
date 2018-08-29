@@ -1,0 +1,392 @@
+/* -----\/----- EXCLUDED -----\/-----
+
+  typedef logic [W-1:0] w_t;
+  typedef logic [$clog2(N)-1:0] n_t;
+
+  //
+  typedef enum logic [4:0] {
+    FSM_ACTIVE_BEGIN = 4'b0000,
+  } active_state_t;
+
+  //
+  typedef enum logic [5:0] {
+    FSM_INACTIVE_IDLE                   = 5'b0_0_0_000,
+    FSM_INACTIVE_ENQUEUE                = 5'b1_0_1_001,
+    FSM_INACTIVE_AWAIT_ACTIVE           = 5'b1_1_0_010,
+    FSM_INACTIVE_DEQUEUE_INIT           = 5'b1_0_1_011,
+    FSM_INACTIVE_DEQUEUE_ISSUE          = 5'b1_0_1_100,
+    FSM_INACTIVE_DEQUEUE_AWAIT_FINAL    = 5'b1_0_1_101
+  } inactive_state_t;
+
+  localparam int INACTIVE_BUSY_B  = 5;
+  localparam int INACTIVE_PREEMPT_B  = 4;
+  localparam int INACTIVE_EN_B  = 3;
+
+  typedef struct packed {
+    n_t              a;
+    n_t              b;
+    active_state_t   blink;
+  } frame_t;
+  
+  //
+  typedef struct packed {
+    n_t              ptr;
+    n_t              n;
+    frame_t          frame;
+    inactive_state_t inactive_state;
+  } context_t;
+  localparam int CONTEXT_W  = $bits(context_t);
+
+  // ======================================================================== //
+  //                                                                          //
+  // Wires                                                                    //
+  //                                                                          //
+  // ======================================================================== //
+
+  //
+  state_t                         fsm_r;
+  state_t                         fsm_w;
+  logic                           fsm_en;
+  //
+  logic                           bank_active_id_r;
+  logic                           bank_active_id_w;
+  logic                           bank_active_id_en;
+  //
+  logic [1:0]                     spsram__en;
+  logic [1:0]                     spsram__wen;
+  n_t   [1:0]                     spsram__addr;
+  w_t   [1:0]                     spsram__din;
+  w_t   [1:0]                     spsram__dout;
+  //
+  `SPSRAM_SIGNALS(inactive_bank__, W, $clog2(N));
+  `SPSRAM_SIGNALS(active_bank__, W, $clog2(N));
+  //
+  n_t                             rd_ptr_r;
+  n_t                             rd_ptr_w;
+  logic                           rd_ptr_en;
+  //
+  n_t                             wr_ptr_r;
+  n_t                             wr_ptr_w;
+  logic                           wr_ptr_en;
+  //
+  logic                           unsorted_rdy_r;
+  logic                           unsorted_rdy_w;
+  logic                           unsorted_rdy_en;
+  //
+  inactive_context_t              inactive_context_r;
+  inactive_context_t              inactive_context_w;
+  logic                           inactive_context_en;
+  //
+  logic                           context_switch;
+  //
+  logic                           inactive_vld_r;
+  logic                           inactive_vld_w;
+  //
+  logic                           inactive_sop_r;
+  logic                           inactive_sop_w;
+  //
+  logic                           inactive_eop_r;
+  logic                           inactive_eop_w;
+  //
+  logic                           sorted_vld_w;
+  logic                           sorted_sop_w;
+  logic                           sorted_eop_w;
+  w_t                             sorted_dat_w;
+  
+  // ======================================================================== //
+  //                                                                          //
+  // Combinatorial Logic                                                      //
+  //                                                                          //
+  // ======================================================================== //
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : inactive_PROC
+
+      //
+      sorted_vld_w              = '0;
+      sorted_sop_w              = '0;
+      sorted_eop_w              = '0;
+      sorted_dat_w              = '0;
+
+      //
+      inactive_bank__en         = '0;
+      inactive_bank__wen        = '0;
+      inactive_bank__addr       = '0;
+      inactive_bank__din        = unsorted_dat;
+
+      //
+      inactive_vld_w            = '0;
+      inactive_sop_w            = '0;
+      inactive_eop_w            = '0;
+
+      //
+      sorted_vld_w              = inactive_vld_r;
+      sorted_sop_w              = inactive_sop_r;
+      sorted_eop_w              = inactive_eop_r;
+      sorted_dat_w              = inactive_bank__dout;
+      
+      //
+      inactive_context_ptr_inc  = inactive_context_r.ptr + 'b1;
+
+      //
+      inactive_context_w        = inactive_context_r;
+      inactive_context_en       = 
+          inactive_context_r.inactive_state [INACTIVE_IDLE_EN_B];
+
+      //
+      unique case (inactive_context_r.inactive_state)
+
+        //
+        FSM_INACTIVE_IDLE: begin
+          inactive_context_en  = unsorted_vld;
+          
+          if (unsorted_vld & unsorted_sop) begin
+            inactive_bank__en         = '1;
+            inactive_bank__wen        = '1;
+            inactive_bank__addr       = '0;
+
+            inactive_context_w.ptr    = 'b1;
+            inactive_context_w.state  = 
+               unsorted_eop ? FSM_INACTIVE_CONTEXT_SWITCH : FSM_INACTIVE_ENQUEUE;
+          end
+        end
+
+        FSM_INACTIVE_ENQUEUE: begin
+
+          if (unsorted_vld) begin
+            inactive_bank__en       = '1;
+            inactive_bank__wen      = '1;
+            inactive_bank__addr     = inactive_context_r.ptr;
+
+            //
+            inactive_context_w.ptr  = inactive_context_ptr_inc;
+
+            //
+            if (unsorted_eop) begin
+              inactive_context_w.state  = FSM_INACTIVE_AWAIT_ACTIVE;
+            end
+          end
+          
+        end
+
+        //
+        FSM_INACTIVE_AWAIT_ACTIVE: begin
+          
+          inactive_context_w                 = inactive_context_r;
+          inactive_context_w.n               = inactive_context_r.ptr;
+          inactive_context_w.active_context  = FSM_ACTIVE_BEGIN;
+          inactive_context_w.inactive_state  = FSM_INACTIVE_DEQUEUE_INIT;
+          
+        end
+
+        FSM_INACTIVE_DEQUEUE_INIT: begin
+          inactive_context_w.ptr             = '0;
+          inactive_context_w.inactive_state  = FSM_INACTIVE_DEQUEUE_ISSUE;
+        end
+
+        FSM_INACTIVE_DEQUEUE_ISSUE: begin
+          inactive_bank__en       = '1;
+          inactive_bank__wen      = '0;
+          inactive_bank__addr     = inactive_context_r.ptr;
+
+          //
+          inactive_vld_w          = 'b1;
+          inactive_sop_w          = (inactive_context_r.ptr == '0);
+
+          inactive_context_w.ptr  = inactive_context_ptr_inc;
+          
+          if (inactive_context_ptr_inc == inactive_context_r.n) begin
+            inactive_eop_w                     = 'b1;
+            inactive_context_w.inactive_state  = FSM_INACTIVE_DEQUEUE_AWAIT_FINAL;
+          end
+        end
+
+        FSM_INACTIVE_DEQUEUE_AWAIT_FINAL: begin
+          if (sorted_vld_r & sorted_eop_r)
+            inactive_context_w.inactive_state  = FSM_INACTIVE_IDLE;
+        end
+        
+        default:
+          ;
+      endcase
+
+    end // block: inactive_PROC
+
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : active_PROC
+
+      //
+      active_bank__en    = '0;
+      active_bank__wen   = '0;
+      active_bank__addr  = '0;
+      active_bank__din   = '0;
+
+      //
+      active_context_w   = active_context_r;
+
+      //
+      unique case (active_context_r.active_state)
+        FSM_ACTIVE_BEGIN: begin
+          active_context_w.frame.a  = '0;
+          active_context_w.frame.b  = active_context_r.n - 'b1;
+        end
+        default:
+          ;
+      endcase
+
+    end // block: active_PROC
+
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : alu_PROC
+
+      //
+      adder__a    = '0;
+      adder__b    = '0;
+      adder__cin  = '0;
+
+    end // block: alu_PROC
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : spsram_PROC
+
+      //
+      spsram__en                        = '0;
+      spsram__wen                       = '0;
+      spsram__addr                      = '0;
+      spsram__din                       = '0;
+
+      //
+      spsram__en [~bank_active_id_r]    = inactive_bank__en;
+      spsram__wen [~bank_active_id_r]   = inactive_bank__wen;
+      spsram__addr [~bank_active_id_r]  = inactive_bank__addr;
+      spsram__din [~bank_active_id_r]   = inactive_bank__din;
+
+      //
+      inactive_bank__dout               = spsram__dout [~bank_active_id_r];
+
+      //
+      spsram__en [ bank_active_id_r]    = active_bank__en;
+      spsram__wen [ bank_active_id_r]   = active_bank__wen;
+      spsram__addr [ bank_active_id_r]  = active_bank__addr;
+      spsram__din [ bank_active_id_r]   = active_bank__din;
+
+      //
+      active_bank__dout                 = spsram__dout [ bank_active_id_r];
+
+    end // block: spsram_PROC
+
+  // ======================================================================== //
+  //                                                                          //
+  // Sequential Logic                                                         //
+  //                                                                          //
+  // ======================================================================== //
+
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      unsorted_rdy_r <= 'b0;
+    else
+      unsorted_rdy_r <= unsorted_rdy_w;
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      wr_ptr_r <= 'b0;
+    else if (wr_ptr_en)
+      wr_ptr_r <= wr_ptr_w;
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      rd_ptr_r <= 'b0;
+    else if (rd_ptr_en)
+      rd_ptr_r <= rd_ptr_w;
+
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      fsm_r <= FSM_IDLE;
+    else if (fsm_en)
+      fsm_r <= fsm_w;
+
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      bank_active_id_r <= '0;
+    else if (bank_active_id_en)
+      bank_active_id_r <= bank_active_id_w;
+
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      inactive_context_r <='{INACTIVE_IDLE};
+    else if (inactive_context_en)
+      inactive_context_r <= context_switch ? active_context_w : inactive_context_w;
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      active_context_r <= '0;
+    else if (active_context_en)
+      active_context_r <= context_switch ? inactive_context_w : active_context_w;
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      sorted_vld_r <= '0;
+    else
+      sorted_vld_r <= sorted_vld_w;
+
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (sorted_vld_w) begin
+      sorted_sop_r <= sorted_sop_w;
+      sorted_eop_r <= sorted_eop_w;
+      sorted_dat_r <= sorted_dat_w;
+    end
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      inactive_vld_r <= 'b0;
+    else
+      inactive_vld_r <= inactive_vld_w;
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (inactive_vld_w) begin
+      inactive_sop_r <= inactive_sop_w;
+      inactive_eop_r <= inactive_eop_w;
+    end
+
+  // ------------------------------------------------------------------------ //
+  //
+  fast_adder #(.N($bits(n_t)), .CARRY_TYPE(libv2_pkg::INFERRED)) u_adder (
+    //
+      .a                 (adder__a           )
+    , .b                 (adder__b           )
+    , .cin               (adder__cin         )
+    //
+    , .y                 (adder__y           )
+    , .cout              (adder__cout        )
+  );
+ -----/\----- EXCLUDED -----/\----- */

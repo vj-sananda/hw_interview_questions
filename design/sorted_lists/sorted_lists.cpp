@@ -443,7 +443,7 @@ struct QryXactor : sc_core::sc_module, QryIntf {
     : sc_core::sc_module(mn)
     , clk("clk")
 #define __construct_ports(__name, __type)       \
-      , __name(#__name)
+    , __name(#__name)
       QRY_PORTS(__construct_ports)
 #undef __construct_ports
   {}
