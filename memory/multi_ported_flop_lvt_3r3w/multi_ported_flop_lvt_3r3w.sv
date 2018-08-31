@@ -80,6 +80,16 @@ module multi_ported_flop_lvt_3r3w (
    , input                                   wen2
    , input        [9:0]                      waddr2
    , input        [31:0]                     wdata2
+
+   //======================================================================== //
+   //                                                                         //
+   // Status/Control                                                          //
+   //                                                                         //
+   //======================================================================== //
+
+   , input                                   init
+   //
+   , output logic                            busy_w
 );
   
   // ======================================================================== //
@@ -104,6 +114,9 @@ module multi_ported_flop_lvt_3r3w (
     , .wen               ({wen2, wen1, wen0}           )
     , .waddr             ({waddr2, waddr1, waddr0}     )
     , .wdata             ({wdata2, wdata1, wdata0}     )
+    //
+    , .init              (init                         )
+    , .busy_w            (busy_w                       )
   );
 
 endmodule
