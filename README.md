@@ -83,6 +83,7 @@ irrelevant for day-to-day roles.
 * fused_multiply_add
 * simd
 * div_by_3
+* multiplier
 
 ### Clocking
 

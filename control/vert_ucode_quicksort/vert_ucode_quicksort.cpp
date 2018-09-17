@@ -31,9 +31,9 @@
 #include <algorithm>
 #include <sstream>
 
-#include "vobj/Vfsm_quicksort.h"
+#include "vobj/Vvert_ucode_quicksort.h"
 
-typedef Vfsm_quicksort uut_t;
+typedef Vvert_ucode_quicksort uut_t;
 typedef uint32_t dat_t;
 typedef std::vector<dat_t> queue_t;
 
@@ -192,9 +192,9 @@ private:
   std::deque<queue_t> expected_;
 };
 
-struct FsmQuicksortTb : libtb2::Top<uut_t> {
-  SC_HAS_PROCESS(FsmQuicksortTb);
-  FsmQuicksortTb(sc_core::sc_module_name mn = "t")
+struct VertUcodeQuicksortTb : libtb2::Top<uut_t> {
+  SC_HAS_PROCESS(VertUcodeQuicksortTb);
+  VertUcodeQuicksortTb(sc_core::sc_module_name mn = "t")
     : uut_("uut")
 #define __construct_ports(__name, __type)       \
       , __name ## _(#__name)
@@ -295,10 +295,10 @@ private:
   SortedMonitor monitor_;
   uut_t uut_;
 };
-SC_MODULE_EXPORT(FsmQuicksortTb);
+SC_MODULE_EXPORT(VertUcodeQuicksortTb);
 
 int sc_main(int argc, char **argv) {
-  FsmQuicksortTb tb("tb");
+  VertUcodeQuicksortTb tb("tb");
   return libtb2::Sim::start(argc, argv);
 }
 

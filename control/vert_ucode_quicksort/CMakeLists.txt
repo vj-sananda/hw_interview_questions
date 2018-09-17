@@ -25,5 +25,7 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-add_subdirectory(fsm_quicksort)
-add_subdirectory(vert_ucode_quicksort)
+emit_answer(
+  tb_vert_ucode_quicksort vert_ucode_quicksort.sv vert_ucode_quicksort.cpp)
+
+add_test(NAME tb_vert_ucode_quicksort_0 COMMAND tb_vert_ucode_quicksort --seed=1)
