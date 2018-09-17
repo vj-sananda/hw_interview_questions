@@ -324,69 +324,85 @@ module vert_ucode_quicksort (
   // Pseudo-code:
   //
   // PROC PARTITION(A, lo, hi):
-  // PRT +    : POP R0           ; R0 <- lo
-  // PRT +    : POP R1           ; R1 <- hi
+  //   __part +   0: POP R1           ; R1 <- hi
+  //   __part +   1: POP R0           ; R0 <- lo
   //;  pivot := A[hi];
-  // PRT +    : LD R2, [R1]      ; R2 <- A[hi]        (R2 === pivot)
+  //   __part +   2: LD R2, [R1]      ; R2 <- A[hi]        (R2 === pivot)
   //;  i := lo
-  // PRT +    : MOV R3, R0       ; R3 <- lo           (R3 === i)
+  //   __part +   3: MOV R3, R0       ; R3 <- lo           (R3 === i)
   //;  j := lo
-  // PRT +    : MOV R4, R0       ; R4 <- lo           (R4 === j)
-  // __loop_start:
-  // PRT +    : SUB 0, R1, R4    ;
-  // PRT +    : BEQ __end        ;
+  //   __part +   4: MOV R4, R0       ; R4 <- lo           (R4 === j)
+  //   __loop_start:
+  //   __part +   5: SUB 0, R1, R4    ;
+  //   __part +   6: BEQ __end        ;
   //;  if (A[j] < pivot) then
-  // PRT +    : LD R5, [R4]      ; R5 <- A[j]
-  // PRT +    : SUB 0, R5, R2    ;
-  // PRT +    : BGT __end_loop   ; if ((A[j] - pivot) > 0) goto __end_of_loop
+  //   __part +   7: LD R5, [R4]      ; R5 <- A[j]
+  //   __part +   8: SUB.F 0, R5, R2  ;
+  //   __part +   9: BGT __end_loop   ; if ((A[j] - pivot) > 0) goto __end_of_loop
   //;  swap A[i] with A[j]
-  // PRT +    : LD R6, [R3]      ;
-  // PRT +    : ST [R3], R5
-  // PRT +    : ST [R4], R6
+  //   __part +  10: LD R6, [R3]      ;
+  //   __part +  11: ST [R3], R5
+  //   __part +  12: ST [R4], R6
   //;  i := i + 1
-  // PRT +    : ADD R3, R3, 1    ; R3 <- (R3 + 1)
-  // __end_of_loop:
-  // PRT +    : ADD R4, R4, 1    ; R4 <- (R4 + 1)
-  // PRT +    : B __loop_start   ;
-  // __end:
-  // PRT +    : LD R0, [R3]      ;
-  // PRT +    : LD R1, [R4]      ;
-  // PRT +    : ST [R3], R1      ;
-  // PRT +    : ST [R4], R0      ;
-  // PRT +    : MOV R0,R3        ; ret <- pivot
-  // PRT +    : RET              ; PC <- BLINK
-  //
-  // PROC QUICKSORT:
-  // QS +     : PUSH BLINK        ;
-  // QS +     : POP R0            ; hi <- R0
-  // QS +     : POP R1            ; lo <- R1
-  // QS +     : SUB 0, R0, R1     ; 
-  // QS +     : BNZ __end         ; if ((hi - lo) > 0) goto __end;
-  // QS +     : PUSH R0           ; 
-  // QS +     : PUSH R1           ;
+  //   __part +  13: ADD R3, R3, 1    ; R3 <- (R3 + 1)
+  //   __end_of_loop:
+  //   __part +  14: ADD R4, R4, 1    ; R4 <- (R4 + 1)
+  //   __part +  15: B __loop_start   ;
+  //   __end:
+  //   __part +  16: LD R0, [R3]      ;
+  //   __part +  17: LD R1, [R4]      ;
+  //   __part +  18: ST [R3], R1      ;
+  //   __part +  19: ST [R4], R0      ;
+  //   __part +  20: MOV R0,R3        ; ret <- pivot
+  //   __part +  21: RET              ; PC <- BLINK
+
+  // PROC QUICKSORT(A, lo, hi):
+  //   __qs +    0: POP R0            ; hi <- R0
+  //   __qs +    1: POP R1            ; lo <- R1
+  //   __qs +    2: PUSH BLINK        ;
+  //;   if lo < hi:
+  //   __qs +    3: SUB.F 0, R0, R1   ; 
+  //   __qs +    4: BLE __end         ; if ((hi - lo) <= 0) goto __end;
+  //   __qs +    5: PUSH R1           ;
+  //   __qs +    6: PUSH R0           ;
+  //   __qs +    7: PUSH R1           ; 
+  //   __qs +    8: PUSH R0           ;
   //;   p := partition(A, lo, hi)
-  // QS +     : CALL PARTITION    ; r0 := partition(A, lo, hi); BLINK <- QS + 7
+  //   __qs +    9: CALL PARTITION    ; r0 := partition(A, lo, hi);
   //;   quicksort(A, lo, p - 1)
-  // QS +     : SUB R2, R0, 1     ;
-  // QS +     : PUSH R0           ;
-  // QS +     : PUSH R2           ;
-  // QS +     : CALL QUICKSORT    ; quicksort(A, lo, p - 1); BLINK <- QS +  8
+  //   __qs +   10: POP R0            ; 
+  //   __qs +   11: POP R1            ;
+  //   __qs +   12: PUSH R1           ; 
+  //   __qs +   13: PUSH R0           ;
+  //   __qs +   14: SUB R2, R0, 1     ;
+  //   __qs +   15: PUSH R0           ;
+  //   __qs +   16: PUSH R2           ;
+  //   __qs +   17: CALL QUICKSORT    ; quicksort(A, lo, p - 1);
   //;   quicksort(A, p + 1, hi)
-  // QS +     : ADD R2, R0, 1     ;
-  // QS +     : PUSH R2           ;
-  // QS +     : PUSH R2           ;
-  // QS +     : CALL QUICKSORT    ; quicksort(A, p + 1, hi); BLINK <- QS +  9
-  // __end:
-  // QS +     : POP BLINK         ; 
-  // QS +     : RET               ; PC <- BLINK
-  //
+  //   __qs +   18: POP R0            ; 
+  //   __qs +   19: POP R1            ;
+  //   __qs +   20: PUSH R1           ; 
+  //   __qs +   21: PUSH R0           ;
+  //   __qs +   22: ADD R2, R0, 1     ;
+  //   __qs +   23: PUSH R2           ;
+  //   __qs +   24: PUSH R0           ;
+  //   __qs +   25: CALL QUICKSORT    ; quicksort(A, p + 1, hi);
+  //   __end:
+  //   __qs +   26: POP R0            ; 
+  //   __qs +   27: POP R1            ;
+  //   __qs +   28: POP BLINK         ; 
+  //   __qs +   29: RET               ; PC <- BLINK
+
   // PROC MAIN(A, lo, hi):
-  //    0     : JMP MAIN         ; PC <- MAIN
-  // MAIN     : WAIT_RDY         ; wait until queue_ready == 1
-  // MAIN +  1: PUSH 0           ; lo <- 0
-  // MAIN +  2: PUSH n           ; hi <- n
-  // MAIN +  3: CALL QUICKSORT   ; call quicksort(A, lo, hi); PC <- QS + 0; BLINK <- MAIN + 4
-  // MAIN +  4: JMP MAIN         ; goto __main
+  //   __main +  0: WAIT_RDY         ; wait until queue_ready == 1
+  //   __main +  1: PUSH 0           ; 
+  //   __main +  2: PUSH context.n   ; 
+  //   __main +  3: CALL __qs        ; call quicksort(A, lo, hi); BLINK <- __quicksort_ret
+  //   __quicksort_ret:
+  //   __main +  4: JMP __main       ; goto __main
+  
+  // PROC RESET:
+  //   __reset +  0: JMP __main
   //
   `include "vert_ucode_quicksort_insts.vh"
   //
