@@ -48,10 +48,6 @@ task inst_sub; begin
   inst  = '0;
 end endtask
 
-task inst_mov; begin
-  inst  = '0;
-end endtask
-
 task inst_push; begin
   inst  = '0;
 end endtask
@@ -65,10 +61,6 @@ task inst_wait; begin
 end endtask
 
 task inst_call; begin
-  inst  = '0;
-end endtask
-
-task inst_ret; begin
   inst  = '0;
 end endtask
 

@@ -69,8 +69,12 @@ package vert_ucode_quicksort_pkg;
     w_t          dat;
   } reg_t;
 
-  typedef logic [5:0] pc_t;
-  localparam pc_t RESET_VECTOR  = '0;
+  typedef logic [7:0] pc_t;
+
+  localparam pc_t SYM_RESET  = 'd0;
+  localparam pc_t SYM_MAIN  = 'd32;
+  localparam pc_t SYM_PARTITION  = 'd64;
+  localparam pc_t SYM_QUICKSORT  = 'd96;
 
   typedef struct packed {
     logic        foo;

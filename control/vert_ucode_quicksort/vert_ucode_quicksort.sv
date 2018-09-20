@@ -321,98 +321,174 @@ module vert_ucode_quicksort (
   //     quicksort(A, lo, p - 1)
   //     quicksort(A, p + 1, hi)
   //
-  // Pseudo-code:
+  //        XXXX_YYYY_YYYY_YYYY
+  //  -------------------------
+  //    Jcc 0001_ccXX_AAAA_AAAA
   //
-  // PROC PARTITION(A, lo, hi):
-  //   __part +   0: POP R1           ; R1 <- hi
-  //   __part +   1: POP R0           ; R0 <- lo
-  //;  pivot := A[hi];
-  //   __part +   2: LD R2, [R1]      ; R2 <- A[hi]        (R2 === pivot)
-  //;  i := lo
-  //   __part +   3: MOV R3, R0       ; R3 <- lo           (R3 === i)
-  //;  j := lo
-  //   __part +   4: MOV R4, R0       ; R4 <- lo           (R4 === j)
-  //   __loop_start:
-  //   __part +   5: SUB 0, R1, R4    ;
-  //   __part +   6: BEQ __end        ;
-  //;  if (A[j] < pivot) then
-  //   __part +   7: LD R5, [R4]      ; R5 <- A[j]
-  //   __part +   8: SUB.F 0, R5, R2  ;
-  //   __part +   9: BGT __end_loop   ; if ((A[j] - pivot) > 0) goto __end_of_loop
-  //;  swap A[i] with A[j]
-  //   __part +  10: LD R6, [R3]      ;
-  //   __part +  11: ST [R3], R5
-  //   __part +  12: ST [R4], R6
-  //;  i := i + 1
-  //   __part +  13: ADD R3, R3, 1    ; R3 <- (R3 + 1)
-  //   __end_of_loop:
-  //   __part +  14: ADD R4, R4, 1    ; R4 <- (R4 + 1)
-  //   __part +  15: B __loop_start   ;
-  //   __end:
-  //   __part +  16: LD R0, [R3]      ;
-  //   __part +  17: LD R1, [R4]      ;
-  //   __part +  18: ST [R3], R1      ;
-  //   __part +  19: ST [R4], R0      ;
-  //   __part +  20: MOV R0,R3        ; ret <- pivot
-  //   __part +  21: RET              ; PC <- BLINK
-
-  // PROC QUICKSORT(A, lo, hi):
-  //   __qs +    0: POP R0            ; hi <- R0
-  //   __qs +    1: POP R1            ; lo <- R1
-  //   __qs +    2: PUSH BLINK        ;
-  //;   if lo < hi:
-  //   __qs +    3: SUB.F 0, R0, R1   ; 
-  //   __qs +    4: BLE __end         ; if ((hi - lo) <= 0) goto __end;
-  //   __qs +    5: PUSH R1           ;
-  //   __qs +    6: PUSH R0           ;
-  //   __qs +    7: PUSH R1           ; 
-  //   __qs +    8: PUSH R0           ;
-  //;   p := partition(A, lo, hi)
-  //   __qs +    9: CALL PARTITION    ; r0 := partition(A, lo, hi);
-  //;   quicksort(A, lo, p - 1)
-  //   __qs +   10: POP R0            ; 
-  //   __qs +   11: POP R1            ;
-  //   __qs +   12: PUSH R1           ; 
-  //   __qs +   13: PUSH R0           ;
-  //   __qs +   14: SUB R2, R0, 1     ;
-  //   __qs +   15: PUSH R0           ;
-  //   __qs +   16: PUSH R2           ;
-  //   __qs +   17: CALL QUICKSORT    ; quicksort(A, lo, p - 1);
-  //;   quicksort(A, p + 1, hi)
-  //   __qs +   18: POP R0            ; 
-  //   __qs +   19: POP R1            ;
-  //   __qs +   20: PUSH R1           ; 
-  //   __qs +   21: PUSH R0           ;
-  //   __qs +   22: ADD R2, R0, 1     ;
-  //   __qs +   23: PUSH R2           ;
-  //   __qs +   24: PUSH R0           ;
-  //   __qs +   25: CALL QUICKSORT    ; quicksort(A, p + 1, hi);
-  //   __end:
-  //   __qs +   26: POP R0            ; 
-  //   __qs +   27: POP R1            ;
-  //   __qs +   28: POP BLINK         ; 
-  //   __qs +   29: RET               ; PC <- BLINK
-
-  // PROC MAIN(A, lo, hi):
-  //   __main +  0: WAIT_RDY         ; wait until queue_ready == 1
-  //   __main +  1: PUSH 0           ; 
-  //   __main +  2: PUSH context.n   ; 
-  //   __main +  3: CALL __qs        ; call quicksort(A, lo, hi); BLINK <- __quicksort_ret
-  //   __quicksort_ret:
-  //   __main +  4: JMP __main       ; goto __main
-  
+  //   PUSH 0010_Xrrr_AAAA_AAAA
+  //    POP 0011_Xrrr_AAAA_AAAA
+  //
+  //     LD 0100_Xrrr_Xsss_XXXX
+  //     ST 0101_Xrrr_Xsss_XXXX
+  //
+  //    MOV 0110_Xrrr_0sss_XXXX
+  //   MOVI 0110_Xrrr_10XX_Xiii
+  //   MOVS 0110_Xrrr_11SS_XXXX
+  //
+  //    ADD 0111_0rrr_Xsss_0uuu
+  //   ADDI 0111_0rrr_Xsss_1iii
+  //    SUB 0111_1rrr_Xsss_0uuu
+  //   SUBI 0111_1rrr_Xsss_1iii
+  //
+  //   CALL 1101_AAAA_AAAA_AAAA
+  //    RET 1110_AAAA_AAAA_AAAA
+  //
+  //   EMIT 1111_XXXX_XXXX_0000
+  //   WAIT 1111_XXXX_XXXX_0001
+  //
   // PROC RESET:
-  //   __reset +  0: JMP __main
+  //   __reset +  0: J __main
+  //
+  // PROC PARTITION(lo, hi):
+  //   __part +   0: PUSH R1          ; Save GPR
+  //   __part +   1: PUSH R2          ;
+  //   __part +   2: PUSH R3          ;
+  //   __part +   3: LD R2, [R1]      ; pivot := A[hi];
+  //   __part +   4: MOV R3, R0       ; i := lo
+  //   __part +   5: MOV R4, R0       ; j := lo
+  //   __loop_start:
+  //   __part +   6: SUB 0, R1, R4    ;
+  //   __part +   7: JEQ __end        ; if (A[j] >= pivot) goto __end_loop
+  //   __part +   8: LD R5, [R4]      ; R5 <- A[j]
+  //   __part +   9: SUB.F 0, R5, R2  ;
+  //   __part +  10: JGT __end_loop   ; if ((A[j] - pivot) > 0) goto __end_of_loop
+  //   __part +  11: LD R6, [R3]      ; swap A[i] with A[j]
+  //   __part +  12: ST [R3], R5
+  //   __part +  13: ST [R4], R6
+  //   __part +  14: ADD R3, R3, 1    ; i := i + 1
+  //   __end_loop:
+  //   __part +  15: ADD R4, R4, 1    ; j := j + 1
+  //   __part +  16: J __loop_start   ;
+  //   __end:
+  //   __part +  17: LD R0, [R3]      ;
+  //   __part +  18: LD R1, [R4]      ;
+  //   __part +  19: ST [R3], R1      ;
+  //   __part +  20: ST [R4], R0      ;
+  //   __part +  21: MOV R0,R3        ; ret <- pivot
+  //   __part +  22: POP R3           ; Restore GPR
+  //   __part +  23: POP R2           ;
+  //   __part +  24: POP R1           ;
+  //   __part +  25: RET              ;
+  //
+  // PROC QUICKSORT(lo, hi):            (R0, R1) = (lo, hi)
+  //   __qs +    0: PUSH BLINK        ;
+  //;   if lo < hi:
+  //   __qs +    1: SUB.F 0, R0, R1   ; 
+  //   __qs +    2: JLE __qs_end      ; if ((hi - lo) <= 0) goto __end;
+  //   __qs +    3: MOV R2, R0        ; (R0, R2) = (lo, lo)
+  //;   p := partition(lo, hi)
+  //   __qs +    4: CALL PARTITION    ; r0 := partition(A, lo, hi);
+  //;   quicksort(lo, p - 1)
+  //   __qs +    5: MOV R3, R0        ; (R3) = (PIVOT)
+  //   __qs +    6: MOV R0, R2        ;
+  //   __qs +    7: SUB R1, R3, 1     ;
+  //   __qs +    8: CALL QUICKSORT    ; quicksort(A, lo, p - 1);
+  //;   quicksort(p + 1, hi)
+  //   __qs +    9: ADD R0, R3, 1     ;
+  //   __qs +   10: MOV R1, R1        ;
+  //   __qs +   11: CALL QUICKSORT    ; quicksort(A, p + 1, hi);
+  //   __qs_end:
+  //   __qs +   12: POP BLINK         ; 
+  //   __qs +   13: RET               ; PC <- BLINK
+  //
+  // PROC MAIN(lo, hi):
+  //   __main +  0: WAIT             ; wait until queue_ready == 1
+  //   __main +  1: MOVI R0, 0       ;
+  //   __main +  2: MOVS R1, N       ; 
+  //   __main +  3: CALL __qs        ; call quicksort(A, lo, hi);
+  //   __main +  4: EMIT             ;
+  //   __main +  5: J   __main       ; goto __main
   //
   `include "vert_ucode_quicksort_insts.vh"
-  //
+
   always_comb
     begin : quicksort_prog_PROC
 
       inst  = '0;
 
+      // Control Store
+      //
+      // Implemented here as a simple lookup table, but in practise more
+      // more efficiently realized as a ROM. Perhaps an FPGA synthesize
+      // tool can automatically infer a ROM from this table, otherwise, the
+      // microcode would need to be hand assembled and loaded as a HEX-file.
+      
       case (pc_r)
-        RESET_VECTOR: inst_nop;
+        //
+        SYM_RESET          : ;
+
+        //
+        SYM_PARTITION      : ;
+        SYM_PARTITION +   1: ;
+        SYM_PARTITION +   2: ;
+        SYM_PARTITION +   3: ;
+        SYM_PARTITION +   4: ;
+        SYM_PARTITION +   5: ;
+        SYM_PARTITION +   6: ;
+        SYM_PARTITION +   7: ;
+        SYM_PARTITION +   8: ;
+        SYM_PARTITION +   9: ;
+        SYM_PARTITION +  10: ;
+        SYM_PARTITION +  11: ;
+        SYM_PARTITION +  12: ;
+        SYM_PARTITION +  13: ;
+        SYM_PARTITION +  14: ;
+        SYM_PARTITION +  15: ;
+        SYM_PARTITION +  16: ;
+        SYM_PARTITION +  17: ;
+        SYM_PARTITION +  18: ;
+        SYM_PARTITION +  19: ;
+        SYM_PARTITION +  20: ;
+        SYM_PARTITION +  21: ;
+
+        //
+        SYM_QUICKSORT      : ;
+        SYM_QUICKSORT +   1: ;
+        SYM_QUICKSORT +   2: ;
+        SYM_QUICKSORT +   3: ;
+        SYM_QUICKSORT +   4: ;
+        SYM_QUICKSORT +   5: ;
+        SYM_QUICKSORT +   6: ;
+        SYM_QUICKSORT +   7: ;
+        SYM_QUICKSORT +   8: ;
+        SYM_QUICKSORT +   9: ;
+        SYM_QUICKSORT +  10: ;
+        SYM_QUICKSORT +  11: ;
+        SYM_QUICKSORT +  12: ;
+        SYM_QUICKSORT +  13: ;
+        SYM_QUICKSORT +  14: ;
+        SYM_QUICKSORT +  15: ;
+        SYM_QUICKSORT +  16: ;
+        SYM_QUICKSORT +  17: ;
+        SYM_QUICKSORT +  18: ;
+        SYM_QUICKSORT +  19: ;
+        SYM_QUICKSORT +  20: ;
+        SYM_QUICKSORT +  21: ;
+        SYM_QUICKSORT +  22: ;
+        SYM_QUICKSORT +  23: ;
+        SYM_QUICKSORT +  24: ;
+        SYM_QUICKSORT +  25: ;
+        SYM_QUICKSORT +  26: ;
+        SYM_QUICKSORT +  27: ;
+        SYM_QUICKSORT +  28: ;
+        SYM_QUICKSORT +  29: ;
+
+        //
+        SYM_MAIN           : ;
+        SYM_MAIN +        1: ;
+        SYM_MAIN +        2: ;
+        SYM_MAIN +        3: ;
+        SYM_MAIN +        4: ;
         
         default: ;
         
@@ -629,7 +705,7 @@ module vert_ucode_quicksort (
   //
   always_ff @(posedge clk)
     if (rst)
-      pc_r <= vert_ucode_quicksort_pkg::RESET_VECTOR;
+      pc_r <= SYM_RESET;
     else
       pc_r <= pc_w;
   // ------------------------------------------------------------------------ //
