@@ -323,7 +323,12 @@ module vert_ucode_quicksort (
   //
   //        XXXX_YYYY_YYYY_YYYY
   //  -------------------------
+  //    NOP 0000_XXXX_XXXX_XXXX
   //    Jcc 0001_ccXX_AAAA_AAAA
+  //
+  //     00 - Unconditional
+  //     EQ - Equal
+  //     GT - Greather Than
   //
   //   PUSH 0010_Xrrr_AAAA_AAAA
   //    POP 0011_Xrrr_AAAA_AAAA
@@ -335,16 +340,16 @@ module vert_ucode_quicksort (
   //   MOVI 0110_Xrrr_10XX_Xiii
   //   MOVS 0110_Xrrr_11SS_XXXX
   //
-  //    ADD 0111_0rrr_Xsss_0uuu
-  //   ADDI 0111_0rrr_Xsss_1iii
-  //    SUB 0111_1rrr_Xsss_0uuu
-  //   SUBI 0111_1rrr_Xsss_1iii
+  //    ADD 0111_0rrr_Fsss_0uuu
+  //   ADDI 0111_0rrr_Fsss_1iii
+  //    SUB 0111_1rrr_Fsss_0uuu
+  //   SUBI 0111_1rrr_Fsss_1iii
   //
-  //   CALL 1101_AAAA_AAAA_AAAA
-  //    RET 1110_AAAA_AAAA_AAAA
+  //   CALL 1100_XXX0_AAAA_AAAA
+  //    RET 1100_XXX1_AAAA_AAAA
   //
-  //   EMIT 1111_XXXX_XXXX_0000
-  //   WAIT 1111_XXXX_XXXX_0001
+  //   WAIT 1111_XXXX_XXXX_0000
+  //   EMIT 1111_XXXX_XXXX_0001
   //
   // PROC RESET:
   //   __reset +  0: J __main
