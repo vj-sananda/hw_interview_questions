@@ -28,48 +28,52 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
+task inst_nop; begin
+  inst_w  = '0;
+end endtask
+
 task inst_mov; begin
-  inst  = '0;
+  inst_w  = '0;
 end endtask
 
 task inst_st; begin
-  inst  = '0;
+  inst_w  = '0;
 end endtask
 
 task inst_ld; begin
-  inst  = '0;
+  inst_w  = '0;
 end endtask
 
 task inst_add; begin
-  inst  = '0;
+  inst_w  = '0;
 end endtask
 
 task inst_sub; begin
-  inst  = '0;
+  inst_w  = '0;
 end endtask
 
 task inst_push; begin
-  inst  = '0;
+  inst_w  = '0;
 end endtask
 
 task inst_pop; begin
-  inst  = '0;
+  inst_w  = '0;
 end endtask
 
 task inst_wait; begin
-  inst  = '0;
+  inst_w  = '0;
 end endtask
 
 task inst_call; begin
-  inst  = '0;
+  inst_w  = '0;
 end endtask
 
 task inst_b; begin
-  inst  = '0;
+  inst_w  = '0;
 end endtask
 
 task inst_ret; begin
-  inst  = '0;
+  inst_w  = '0;
 end endtask
    
 function inst_t decode (inst_t inst); begin

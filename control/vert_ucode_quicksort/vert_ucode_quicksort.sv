@@ -178,8 +178,11 @@ module vert_ucode_quicksort (
   //
   pc_t                                  pc_r;
   pc_t                                  pc_w;
+  logic                                 pc_en;
   //
-  inst_t                                inst;
+  inst_t                                inst_r;
+  inst_t                                inst_w;
+  logic                                 inst_en;
   //
   ucode_t                               ucode;
   
@@ -324,11 +327,12 @@ module vert_ucode_quicksort (
   //        XXXX_YYYY_YYYY_YYYY
   //  -------------------------
   //    NOP 0000_XXXX_XXXX_XXXX
-  //    Jcc 0001_ccXX_AAAA_AAAA
+  //    Jcc 0001_XXcc_AAAA_AAAA
   //
-  //     00 - Unconditional
-  //     EQ - Equal
-  //     GT - Greather Than
+  //     00 - "" Unconditional
+  //     01 - "EQ" Equal
+  //     10 - "GT" Greather-Than
+  //     11 - "LE" Less-Than or Equal
   //
   //   PUSH 0010_Xrrr_AAAA_AAAA
   //    POP 0011_Xrrr_AAAA_AAAA
@@ -340,162 +344,155 @@ module vert_ucode_quicksort (
   //   MOVI 0110_Xrrr_10XX_Xiii
   //   MOVS 0110_Xrrr_11SS_XXXX
   //
-  //    ADD 0111_0rrr_Fsss_0uuu
-  //   ADDI 0111_0rrr_Fsss_1iii
-  //    SUB 0111_1rrr_Fsss_0uuu
-  //   SUBI 0111_1rrr_Fsss_1iii
+  //    ADD 0111_0rrr_Wsss_0uuu
+  //   ADDI 0111_0rrr_Wsss_1iii
+  //    SUB 0111_1rrr_Wsss_0uuu
+  //   SUBI 0111_1rrr_Wsss_1iii
   //
-  //   CALL 1100_XXX0_AAAA_AAAA
-  //    RET 1100_XXX1_AAAA_AAAA
+  //   CALL 1100_0XXX_AAAA_AAAA
+  //    RET 1100_1XXX_AAAA_AAAA
   //
-  //   WAIT 1111_XXXX_XXXX_0000
-  //   EMIT 1111_XXXX_XXXX_0001
+  //   WAIT 1111_0XXX_XXXX_XXXX
+  //   EMIT 1111_1XXX_XXXX_XXXX
   //
   // PROC RESET:
-  //   __reset +  0: J __main
+  //   __reset     : J __start        ; PROC RESET:
   //
-  // PROC PARTITION(lo, hi):
-  //   __part +   0: PUSH R1          ; Save GPR
-  //   __part +   1: PUSH R2          ;
-  //   __part +   2: PUSH R3          ;
-  //   __part +   3: LD R2, [R1]      ; pivot := A[hi];
-  //   __part +   4: MOV R3, R0       ; i := lo
-  //   __part +   5: MOV R4, R0       ; j := lo
-  //   __loop_start:
-  //   __part +   6: SUB 0, R1, R4    ;
-  //   __part +   7: JEQ __end        ; if (A[j] >= pivot) goto __end_loop
-  //   __part +   8: LD R5, [R4]      ; R5 <- A[j]
-  //   __part +   9: SUB.F 0, R5, R2  ;
-  //   __part +  10: JGT __end_loop   ; if ((A[j] - pivot) > 0) goto __end_of_loop
-  //   __part +  11: LD R6, [R3]      ; swap A[i] with A[j]
-  //   __part +  12: ST [R3], R5
-  //   __part +  13: ST [R4], R6
-  //   __part +  14: ADD R3, R3, 1    ; i := i + 1
-  //   __end_loop:
-  //   __part +  15: ADD R4, R4, 1    ; j := j + 1
-  //   __part +  16: J __loop_start   ;
-  //   __end:
-  //   __part +  17: LD R0, [R3]      ;
-  //   __part +  18: LD R1, [R4]      ;
-  //   __part +  19: ST [R3], R1      ;
-  //   __part +  20: ST [R4], R0      ;
-  //   __part +  21: MOV R0,R3        ; ret <- pivot
-  //   __part +  22: POP R3           ; Restore GPR
-  //   __part +  23: POP R2           ;
-  //   __part +  24: POP R1           ;
-  //   __part +  25: RET              ;
+  // PROC PARTITION:
+  //   __part      : PUSH R2          ;
+  //               : PUSH R3          ;
+  //               : PUSH R4          ;
+  //               : PUSH R5          ;
+  //               : PUSH R6          ;
+  //               : LD R2, [R1]      ; pivot <- A[hi];
+  //               : MOV R3, R0       ; i <- lo
+  //               : MOV R4, R0       ; j <- lo
+  //   __loop_start: SUB 0, R1, R4    ;
+  //               : JEQ __end        ; if (j == hi) goto __end
+  //               : LD R5, [R4]      ; R5 <- A[j]
+  //               : SUB.F 0, R5, R2  ;
+  //               : JGT __end_loop   ; if ((A[j] - pivot) > 0) goto __end_of_loop
+  //               : LD R6, [R3]      ; swap A[i] with A[j]
+  //               : ST [R3], R5      ;
+  //               : ST [R4], R6      ;
+  //               : ADDI R3, R3, 1   ; i <- i + 1
+  //   __end_loop  : ADDI R4, R4, 1   ; j <- j + 1
+  //               : J __loop_start   ;
+  //   __end       : LD R0, [R3]      ;
+  //               : LD R1, [R4]      ;
+  //               : ST [R3], R1      ;
+  //               : ST [R4], R0      ;
+  //               : MOV R0,R3        ; ret <- pivot
+  //               : POP R6           ;
+  //               : POP R5           ;
+  //               : POP R4           ;
+  //               : POP R3           ;
+  //               : POP R2           ;
+  //               : RET              ;
   //
-  // PROC QUICKSORT(lo, hi):            (R0, R1) = (lo, hi)
-  //   __qs +    0: PUSH BLINK        ;
-  //;   if lo < hi:
-  //   __qs +    1: SUB.F 0, R0, R1   ; 
-  //   __qs +    2: JLE __qs_end      ; if ((hi - lo) <= 0) goto __end;
-  //   __qs +    3: MOV R2, R0        ; (R0, R2) = (lo, lo)
-  //;   p := partition(lo, hi)
-  //   __qs +    4: CALL PARTITION    ; r0 := partition(A, lo, hi);
-  //;   quicksort(lo, p - 1)
-  //   __qs +    5: MOV R3, R0        ; (R3) = (PIVOT)
-  //   __qs +    6: MOV R0, R2        ;
-  //   __qs +    7: SUB R1, R3, 1     ;
-  //   __qs +    8: CALL QUICKSORT    ; quicksort(A, lo, p - 1);
-  //;   quicksort(p + 1, hi)
-  //   __qs +    9: ADD R0, R3, 1     ;
-  //   __qs +   10: MOV R1, R1        ;
-  //   __qs +   11: CALL QUICKSORT    ; quicksort(A, p + 1, hi);
-  //   __qs_end:
-  //   __qs +   12: POP BLINK         ; 
-  //   __qs +   13: RET               ; PC <- BLINK
+  // PROC QUICKSORT:
+  //   __qs        : PUSH BLINK       ;
+  //               : PUSH R2          ;
+  //               : PUSH R3          ;
+  //               : PUSH R4          ;
+  //               : MOV R2, R0       ; R2 <- LO
+  //               : MOV R4, R1       ; R4 <- HI
+  //               : SUB.F 0, R0, R1  ; 
+  //               : JLE __qs_end     ; if ((hi - lo) <= 0) goto __end;
+  //               : CALL PARTITION   ; R0 <- partition(lo, hi);
+  //               : MOV R3, R0       ; R3 <- PIVOT
+  //               : MOV R0, R2       ;
+  //               : SUBI R1, R3, 1   ;
+  //               : CALL QUICKSORT   ; quicksort(lo, p - 1);
+  //               : ADDI R0, R2, 1   ;
+  //               : MOV R1, R3       ;
+  //               : CALL QUICKSORT   ; quicksort(p + 1, hi);
+  //               : POP R4           ;
+  //               : POP R3           ;
+  //               : POP R2           ;
+  //   __qs_end    : POP BLINK        ; 
+  //               : RET              ; PC <- BLINK
   //
-  // PROC MAIN(lo, hi):
-  //   __main +  0: WAIT             ; wait until queue_ready == 1
-  //   __main +  1: MOVI R0, 0       ;
-  //   __main +  2: MOVS R1, N       ; 
-  //   __main +  3: CALL __qs        ; call quicksort(A, lo, hi);
-  //   __main +  4: EMIT             ;
-  //   __main +  5: J   __main       ; goto __main
+  //  PROC START:
+  //   __start     : WAIT             ; wait until queue_ready == 1
+  //
+  //               : MOVI R0, 0       ;
+  //               : MOVS R1, N       ; 
+  //               : CALL __qs        ; call quicksort(A, lo, hi);
+  //               : EMIT             ;
+  //               : J __main         ; goto __main
   //
   `include "vert_ucode_quicksort_insts.vh"
 
   always_comb
     begin : quicksort_prog_PROC
 
-      inst  = '0;
+      inst_w  = '0;
 
       // Control Store
       //
       // Implemented here as a simple lookup table, but in practise more
-      // more efficiently realized as a ROM. Perhaps an FPGA synthesize
+      // more efficiently realized as a ROM. Perhaps an FPGA synthesis
       // tool can automatically infer a ROM from this table, otherwise, the
       // microcode would need to be hand assembled and loaded as a HEX-file.
       
-      case (pc_r)
+      case (pc_w)
         //
-        SYM_RESET          : ;
+        SYM_RESET          : inst_nop;
 
         //
-        SYM_PARTITION      : ;
-        SYM_PARTITION +   1: ;
-        SYM_PARTITION +   2: ;
-        SYM_PARTITION +   3: ;
-        SYM_PARTITION +   4: ;
-        SYM_PARTITION +   5: ;
-        SYM_PARTITION +   6: ;
-        SYM_PARTITION +   7: ;
-        SYM_PARTITION +   8: ;
-        SYM_PARTITION +   9: ;
-        SYM_PARTITION +  10: ;
-        SYM_PARTITION +  11: ;
-        SYM_PARTITION +  12: ;
-        SYM_PARTITION +  13: ;
-        SYM_PARTITION +  14: ;
-        SYM_PARTITION +  15: ;
-        SYM_PARTITION +  16: ;
-        SYM_PARTITION +  17: ;
-        SYM_PARTITION +  18: ;
-        SYM_PARTITION +  19: ;
-        SYM_PARTITION +  20: ;
-        SYM_PARTITION +  21: ;
+        SYM_PARTITION      : inst_nop;
+        SYM_PARTITION +   1: inst_nop;
+        SYM_PARTITION +   2: inst_nop;
+        SYM_PARTITION +   3: inst_nop;
+        SYM_PARTITION +   4: inst_nop;
+        SYM_PARTITION +   5: inst_nop;
+        SYM_PARTITION +   6: inst_nop;
+        SYM_PARTITION +   7: inst_nop;
+        SYM_PARTITION +   8: inst_nop;
+        SYM_PARTITION +   9: inst_nop;
+        SYM_PARTITION +  10: inst_nop;
+        SYM_PARTITION +  11: inst_nop;
+        SYM_PARTITION +  12: inst_nop;
+        SYM_PARTITION +  13: inst_nop;
+        SYM_PARTITION +  14: inst_nop;
+        SYM_PARTITION +  15: inst_nop;
+        SYM_PARTITION +  16: inst_nop;
+        SYM_PARTITION +  17: inst_nop;
+        SYM_PARTITION +  18: inst_nop;
+        SYM_PARTITION +  19: inst_nop;
+        SYM_PARTITION +  20: inst_nop;
+        SYM_PARTITION +  21: inst_nop;
+        SYM_PARTITION +  22: inst_nop;
+        SYM_PARTITION +  23: inst_nop;
+        SYM_PARTITION +  24: inst_nop;
+        SYM_PARTITION +  25: inst_nop;
 
         //
-        SYM_QUICKSORT      : ;
-        SYM_QUICKSORT +   1: ;
-        SYM_QUICKSORT +   2: ;
-        SYM_QUICKSORT +   3: ;
-        SYM_QUICKSORT +   4: ;
-        SYM_QUICKSORT +   5: ;
-        SYM_QUICKSORT +   6: ;
-        SYM_QUICKSORT +   7: ;
-        SYM_QUICKSORT +   8: ;
-        SYM_QUICKSORT +   9: ;
-        SYM_QUICKSORT +  10: ;
-        SYM_QUICKSORT +  11: ;
-        SYM_QUICKSORT +  12: ;
-        SYM_QUICKSORT +  13: ;
-        SYM_QUICKSORT +  14: ;
-        SYM_QUICKSORT +  15: ;
-        SYM_QUICKSORT +  16: ;
-        SYM_QUICKSORT +  17: ;
-        SYM_QUICKSORT +  18: ;
-        SYM_QUICKSORT +  19: ;
-        SYM_QUICKSORT +  20: ;
-        SYM_QUICKSORT +  21: ;
-        SYM_QUICKSORT +  22: ;
-        SYM_QUICKSORT +  23: ;
-        SYM_QUICKSORT +  24: ;
-        SYM_QUICKSORT +  25: ;
-        SYM_QUICKSORT +  26: ;
-        SYM_QUICKSORT +  27: ;
-        SYM_QUICKSORT +  28: ;
-        SYM_QUICKSORT +  29: ;
+        SYM_QUICKSORT      : inst_nop;
+        SYM_QUICKSORT +   1: inst_nop;
+        SYM_QUICKSORT +   2: inst_nop;
+        SYM_QUICKSORT +   3: inst_nop;
+        SYM_QUICKSORT +   4: inst_nop;
+        SYM_QUICKSORT +   5: inst_nop;
+        SYM_QUICKSORT +   6: inst_nop;
+        SYM_QUICKSORT +   7: inst_nop;
+        SYM_QUICKSORT +   8: inst_nop;
+        SYM_QUICKSORT +   9: inst_nop;
+        SYM_QUICKSORT +  10: inst_nop;
+        SYM_QUICKSORT +  11: inst_nop;
+        SYM_QUICKSORT +  12: inst_nop;
+        SYM_QUICKSORT +  13: inst_nop;
 
         //
-        SYM_MAIN           : ;
-        SYM_MAIN +        1: ;
-        SYM_MAIN +        2: ;
-        SYM_MAIN +        3: ;
-        SYM_MAIN +        4: ;
+        SYM_MAIN           : inst_nop;
+        SYM_MAIN +        1: inst_nop;
+        SYM_MAIN +        2: inst_nop;
+        SYM_MAIN +        3: inst_nop;
+        SYM_MAIN +        4: inst_nop;
+        SYM_MAIN +        5: inst_nop;
         
-        default: ;
+        default:             inst_nop;
         
       endcase // case (pc_r)
 
@@ -507,10 +504,23 @@ module vert_ucode_quicksort (
     begin : ucode_PROC
 
       //
-      ucode  = decode(inst);
+      ucode  = decode(inst_r);
 
 
     end // block: ucode_PROC
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : datapath_PROC
+
+      //
+      pc_en    = '0;
+      pc_w     = pc_r;
+
+      inst_en  = '0;
+
+    end // block: datapath_PROC
   
   // ------------------------------------------------------------------------ //
   //
@@ -765,6 +775,22 @@ module vert_ucode_quicksort (
       enqueue_bank_idx_r <= '0;
     else if (enqueue_bank_idx_en)
       enqueue_bank_idx_r <= enqueue_bank_idx_w;
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      pc_r <= SYM_RESET;
+    else if (pc_en)
+      pc_r <= pc_w;
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      inst_r <= '0;
+    else if (inst_en)
+      inst_r <= inst_w;
   
   // ------------------------------------------------------------------------ //
   //
