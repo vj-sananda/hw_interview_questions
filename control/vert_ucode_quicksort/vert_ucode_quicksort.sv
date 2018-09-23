@@ -168,23 +168,61 @@ module vert_ucode_quicksort (
   logic                                 stack__cmd_vld;
   logic                                 stack__cmd_push;
   logic                                 stack__cmd_clr;
-  sort_context_t                        stack__cmd_push_dat;
-  sort_context_t                        stack__cmd_pop_dat_r;
+  w_t                                   stack__cmd_push_dat;
+  w_t                                   stack__cmd_pop_dat_r;
   logic                                 stack__empty_r;
   logic                                 stack__full_r;
   //
   sort_momento_t                        sort_momento_in;
   sort_momento_t                        sort_momento_out_r;
   //
-  pc_t                                  pc_r;
-  pc_t                                  pc_w;
-  logic                                 pc_en;
+  pc_t                                  fetch_pc_r;
+  pc_t                                  fetch_pc_w;
+  logic                                 fetch_pc_en;
+  //
+  pc_t                                  decode_pc_r;
+  pc_t                                  decode_pc_w;
+  logic                                 decode_pc_en;
+  //
+  pc_t                                  fetch_pc_next_w;
+  //
+  logic                                 inst_vld_w;
+  logic                                 inst_vld_r;
   //
   inst_t                                inst_r;
   inst_t                                inst_w;
   logic                                 inst_en;
   //
   ucode_t                               ucode;
+  //
+  w_t                                   adder__y;
+  logic                                 adder__cout;
+  w_t                                   adder__a;
+  w_t                                   adder__b;
+  logic                                 adder__cin;
+  //
+  logic                                 flag_en;
+  //
+  logic                                 flag_z_w;
+  logic                                 flag_n_w;
+  //
+  logic                                 flag_z_r;
+  logic                                 flag_n_r;
+  //
+  reg_t [1:0]                           rf__ra;
+  logic [1:0]                           rf__ren;
+  w_t   [1:0]                           rf__rdata;
+  //
+  reg_t                                 rf__wa_w;
+  logic                                 rf__wen_w;
+  w_t                                   rf__wdata_w;
+  //
+  reg_t                                 rf__wa_r;
+  logic                                 rf__wen_r;
+  w_t                                   rf__wdata_r;
+  //
+  logic                                 fetch_adv;
+  logic                                 decode_adv;
   
   // ======================================================================== //
   //                                                                          //
@@ -334,15 +372,15 @@ module vert_ucode_quicksort (
   //     10 - "GT" Greather-Than
   //     11 - "LE" Less-Than or Equal
   //
-  //   PUSH 0010_Xrrr_AAAA_AAAA
-  //    POP 0011_Xrrr_AAAA_AAAA
+  //   PUSH 0010_0rrr_XXXX_XXXX
+  //    POP 0010_1rrr_XXXX_XXXX
   //
-  //     LD 0100_Xrrr_Xsss_XXXX
-  //     ST 0101_Xrrr_Xsss_XXXX
+  //     LD 0100_0rrr_Xsss_XXXX
+  //     ST 0100_1rrr_Xsss_XXXX
   //
-  //    MOV 0110_Xrrr_0sss_XXXX
-  //   MOVI 0110_Xrrr_10XX_Xiii
-  //   MOVS 0110_Xrrr_11SS_XXXX
+  //    MOV 0110_0rrr_Xsss_XXXX
+  //   MOVI 0110_1rrr_0XXX_Xiii
+  //   MOVS 0110_1rrr_1SSS_XXXX
   //
   //    ADD 0111_0rrr_Wsss_0uuu
   //   ADDI 0111_0rrr_Wsss_1iii
@@ -407,10 +445,10 @@ module vert_ucode_quicksort (
   //               : ADDI R0, R2, 1   ;
   //               : MOV R1, R3       ;
   //               : CALL QUICKSORT   ; quicksort(p + 1, hi);
-  //               : POP R4           ;
+  //   __qs_end    : POP R4           ;
   //               : POP R3           ;
   //               : POP R2           ;
-  //   __qs_end    : POP BLINK        ; 
+  //               : POP BLINK        ; 
   //               : RET              ; PC <- BLINK
   //
   //  PROC START:
@@ -423,11 +461,17 @@ module vert_ucode_quicksort (
   //               : J __main         ; goto __main
   //
   `include "vert_ucode_quicksort_insts.vh"
+  //
+  localparam pc_t SYM_RESET  = 'd0;
+  localparam pc_t SYM_START  = 'd32;
+  localparam pc_t SYM_PARTITION  = 'd64;
+  localparam pc_t SYM_QUICKSORT  = 'd96;
 
   always_comb
     begin : quicksort_prog_PROC
 
-      inst_w  = '0;
+      inst_vld_w  = '0;
+      inst_w      = '0;
 
       // Control Store
       //
@@ -436,78 +480,78 @@ module vert_ucode_quicksort (
       // tool can automatically infer a ROM from this table, otherwise, the
       // microcode would need to be hand assembled and loaded as a HEX-file.
       
-      case (pc_w)
+      case (fetch_pc_r)
         //
-        SYM_RESET          : inst_nop;
+        SYM_RESET          : inst_j(SYM_START);
 
         //
-        SYM_PARTITION      : inst_nop;
-        SYM_PARTITION +   1: inst_nop;
-        SYM_PARTITION +   2: inst_nop;
-        SYM_PARTITION +   3: inst_nop;
-        SYM_PARTITION +   4: inst_nop;
-        SYM_PARTITION +   5: inst_nop;
-        SYM_PARTITION +   6: inst_nop;
-        SYM_PARTITION +   7: inst_nop;
-        SYM_PARTITION +   8: inst_nop;
-        SYM_PARTITION +   9: inst_nop;
-        SYM_PARTITION +  10: inst_nop;
-        SYM_PARTITION +  11: inst_nop;
-        SYM_PARTITION +  12: inst_nop;
-        SYM_PARTITION +  13: inst_nop;
-        SYM_PARTITION +  14: inst_nop;
-        SYM_PARTITION +  15: inst_nop;
-        SYM_PARTITION +  16: inst_nop;
-        SYM_PARTITION +  17: inst_nop;
-        SYM_PARTITION +  18: inst_nop;
-        SYM_PARTITION +  19: inst_nop;
-        SYM_PARTITION +  20: inst_nop;
-        SYM_PARTITION +  21: inst_nop;
-        SYM_PARTITION +  22: inst_nop;
-        SYM_PARTITION +  23: inst_nop;
-        SYM_PARTITION +  24: inst_nop;
-        SYM_PARTITION +  25: inst_nop;
+        SYM_PARTITION      : inst_push(R2);
+        SYM_PARTITION +   1: inst_push(R3);
+        SYM_PARTITION +   2: inst_push(R4);
+        SYM_PARTITION +   3: inst_push(R5);
+        SYM_PARTITION +   4: inst_push(R6);
+        SYM_PARTITION +   5: inst_ld(R2, R1);
+        SYM_PARTITION +   6: inst_mov(R3, R0);
+        SYM_PARTITION +   7: inst_mov(R4, R0);
+        SYM_PARTITION +   8: inst_sub(R0, R1, R4, .dst_en('b0));
+        SYM_PARTITION +   9: inst_j(SYM_PARTITION + 19, .cc(EQ));
+        SYM_PARTITION +  10: inst_ld(R5, R4);
+        SYM_PARTITION +  11: inst_sub(R0, R5, R2, .dst_en('b0));
+        SYM_PARTITION +  12: inst_j(SYM_PARTITION + 17, .cc(GT));
+        SYM_PARTITION +  13: inst_ld(R6, R3);
+        SYM_PARTITION +  14: inst_st(R3, R4);
+        SYM_PARTITION +  15: inst_st(R4, R6);
+        SYM_PARTITION +  16: inst_addi(R3, R3, 'b1);
+        SYM_PARTITION +  17: inst_addi(R4, R4, 'b1);
+        SYM_PARTITION +  18: inst_j(SYM_PARTITION + 8);
+        SYM_PARTITION +  19: inst_ld(R0, R3);
+        SYM_PARTITION +  20: inst_ld(R1, R4);
+        SYM_PARTITION +  21: inst_st(R3, R1);
+        SYM_PARTITION +  22: inst_st(R4, R0);
+        SYM_PARTITION +  23: inst_mov(R0, R3);
+        SYM_PARTITION +  24: inst_pop(R6);
+        SYM_PARTITION +  25: inst_pop(R5);
+        SYM_PARTITION +  26: inst_pop(R4);
+        SYM_PARTITION +  27: inst_pop(R3);
+        SYM_PARTITION +  28: inst_pop(R2);
+        SYM_PARTITION +  29: inst_ret();
 
         //
-        SYM_QUICKSORT      : inst_nop;
-        SYM_QUICKSORT +   1: inst_nop;
-        SYM_QUICKSORT +   2: inst_nop;
-        SYM_QUICKSORT +   3: inst_nop;
-        SYM_QUICKSORT +   4: inst_nop;
-        SYM_QUICKSORT +   5: inst_nop;
-        SYM_QUICKSORT +   6: inst_nop;
-        SYM_QUICKSORT +   7: inst_nop;
-        SYM_QUICKSORT +   8: inst_nop;
-        SYM_QUICKSORT +   9: inst_nop;
-        SYM_QUICKSORT +  10: inst_nop;
-        SYM_QUICKSORT +  11: inst_nop;
-        SYM_QUICKSORT +  12: inst_nop;
-        SYM_QUICKSORT +  13: inst_nop;
+        SYM_QUICKSORT      : inst_push(BLINK);
+        SYM_QUICKSORT +   1: inst_push(R2);
+        SYM_QUICKSORT +   2: inst_push(R3);
+        SYM_QUICKSORT +   3: inst_push(R4);
+        SYM_QUICKSORT +   4: inst_mov(R2, R0);
+        SYM_QUICKSORT +   5: inst_mov(R4, R1);
+        SYM_QUICKSORT +   6: inst_sub(R0, R0, R1, .dst_en('b0));
+        SYM_QUICKSORT +   7: inst_j(SYM_QUICKSORT + 16, LE);
+        SYM_QUICKSORT +   8: inst_call(SYM_PARTITION);
+        SYM_QUICKSORT +   9: inst_mov(R3, R0);
+        SYM_QUICKSORT +  10: inst_mov(R0, R2);
+        SYM_QUICKSORT +  11: inst_subi(R1, R3, 'd1);
+        SYM_QUICKSORT +  12: inst_call(SYM_QUICKSORT);
+        SYM_QUICKSORT +  13: inst_addi(R0, R2, 'd1);
+        SYM_QUICKSORT +  14: inst_mov(R1, R3);
+        SYM_QUICKSORT +  15: inst_call(SYM_QUICKSORT);
+        SYM_QUICKSORT +  16: inst_pop(R4);
+        SYM_QUICKSORT +  17: inst_pop(R3);
+        SYM_QUICKSORT +  18: inst_pop(R2);
+        SYM_QUICKSORT +  19: inst_pop(BLINK);
+        SYM_QUICKSORT +  20: inst_ret();
 
         //
-        SYM_MAIN           : inst_nop;
-        SYM_MAIN +        1: inst_nop;
-        SYM_MAIN +        2: inst_nop;
-        SYM_MAIN +        3: inst_nop;
-        SYM_MAIN +        4: inst_nop;
-        SYM_MAIN +        5: inst_nop;
+        SYM_START          : inst_wait();
+        SYM_START +       1: inst_movi(R0, '0);
+        SYM_START +       2: inst_movs(R1, REG_N);
+        SYM_START +       3: inst_call(SYM_QUICKSORT);
+        SYM_START +       4: inst_emit();
+        SYM_START +       5: inst_j(SYM_START);
         
-        default:             inst_nop;
+        default:             inst_nop();
         
-      endcase // case (pc_r)
+      endcase // case (fetch_pc_r)
 
     end // block: quicksort_prog_PROC
-  
-  // ------------------------------------------------------------------------ //
-  //
-  always_comb
-    begin : ucode_PROC
-
-      //
-      ucode  = decode(inst_r);
-
-
-    end // block: ucode_PROC
   
   // ------------------------------------------------------------------------ //
   //
@@ -515,10 +559,97 @@ module vert_ucode_quicksort (
     begin : datapath_PROC
 
       //
-      pc_en    = '0;
-      pc_w     = pc_r;
+      ucode            = decode(inst_r);
 
-      inst_en  = '0;
+      //
+      unique case (1'b1)
+        ucode.is_wait: decode_adv  = queue_ready [sort_bank_idx_r];
+        default:       decode_adv  = inst_vld_r;
+      endcase // unique case (1'b1)
+      
+      //
+      fetch_adv         = '0;
+
+      //
+      inst_en           = '0;
+      
+      //
+      fetch_pc_en       = '0;
+      fetch_pc_next_w   = fetch_pc_next_r + 'b1;
+
+      //
+      case (1'b0)
+        default: fetch_pc_w  = pc_next_w;
+      endcase // case (1'b0)
+
+      decode_pc_en  = '0;
+      decode_pc_w   = fetch_pc_r;
+
+      //
+      rf__ra        = {ucode.src1, ucode.src0};
+      
+      //
+      src0_is_wrbk  = rf__wen_r & (rf__ra [0] == rf__wa_r);
+
+      //
+      case (1'b1)
+        src0_is_wrbk: src0  = rf__wdata_r;
+        default:      src0  = rf__rdata [0];
+      endcase // case (1'b0)
+
+      //
+      src1_is_wrbk  = rf__wen_r & (rf__ra [1] == rf__wa_r);
+
+      //
+      case (1'b0)
+        src1_is_wrbk: src1  = rf__wdata_r;
+        default:      src1  = rf__rdata [1];
+      endcase // case (1'b0)
+
+      //
+      rf__ren [0]  = ucode.src0_en & (~src0_is_wrbk);
+      rf__ren [1]  = ucode.src1_en & (~src1_is_wrbk);
+      
+      //
+      unique case ({ucode.src0_is_zero})
+        1'b1:    adder__a  = '0;
+        default: adder__a  = src0;
+      endcase // case (1'b0)
+
+      //
+      unique case ({ucode.has_imm})
+        1'b1:    adder__b  = w_t'(ucode.imm);
+        default: adder__b  = src1 ^ {W{ucode.inv_src1}};
+      endcase // case (1'b0)
+
+      //
+      adder__cin  = ucode.cin;
+
+      //
+      flag_en     = decode_adv & ucode.flag_en;
+      flag_n_w    = adder__y [W - 1];
+      flag_z_w    = (adder__y == '0);
+
+      //
+      rf__wen_w   = ucode.dst_en;
+      case (1'b0)
+        default: begin
+          rf__wa_w     = ucode.dst;
+          rf__wdata_w  = adder__y;
+        end
+      endcase // case (1'b0)
+
+      //
+      stack__cmd_vld       = decode_adv & (ucode.is_push | ucode.is_pop);
+      stack__cmd_push      = ucode.is_push;
+      stack__cmd_push_dat  = adder__y;
+      stack__cmd_clr       = '0;
+
+      //
+      sort_bank_en         = decode_adv & ucode.is_emit;
+      sort_bank            = bank_state_r [sort_bank_idx_r];
+      sort_bank.status     = BANK_SORTED;
+      sort_bank.error      = '0;
 
     end // block: datapath_PROC
   
@@ -720,6 +851,30 @@ module vert_ucode_quicksort (
   //
   always_ff @(posedge clk)
     if (rst)
+      {flag_z_r, flag_n_r} <= 'b0;
+    else if (flag_en)
+      {flag_z_r, flag_n_r} <= {flag_z_w, flag_n_w};
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      rf__wen_r  = '0;
+    else
+      rf__wen_r <= rf__wen_w;
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rf__wen_w) begin
+      rf__wa_r    <= rf__wa_w;
+      rf__wdata_r <= rf__wdata_w;
+    end
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
       pc_r <= SYM_RESET;
     else
       pc_r <= pc_w;
@@ -788,6 +943,14 @@ module vert_ucode_quicksort (
   //
   always_ff @(posedge clk)
     if (rst)
+      inst_vld_r <= '0;
+    else
+      inst_vld_r <= inst_vld_w;
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
       inst_r <= '0;
     else if (inst_en)
       inst_r <= inst_w;
@@ -835,7 +998,35 @@ module vert_ucode_quicksort (
 
   // ------------------------------------------------------------------------ //
   //
-  stack #(.W(SORT_CONTEXT_W), .N(16)) u_stack (
+  fast_adder #(.W(W)) u_adder (
+    //
+      .y                 (adder__y           )
+    , .cout              (adder__cout        )
+    //
+    , .a                 (adder__a           )
+    , .b                 (adder__b           )
+    , .cout              (adder__cin         )
+  );
+  
+  // ------------------------------------------------------------------------ //
+  //
+  rf #(.W(W), .N(8), .RD_N(2)) u_rf (
+    //
+      .clk               (clk                )
+    , .rst               (rst                )
+    //
+    , .ra                (rf__ra             )
+    , .ren               (rf__ren            )
+    , .rdata             (rf__rdata          )
+    //
+    , .wa                (rf__wa_r           )
+    , .wen               (rf__wen_r          )
+    , .wdata             (rf__wdata_r        )
+  );
+
+  // ------------------------------------------------------------------------ //
+  //
+  stack #(.W(W), .N(16)) u_stack (
     //
       .clk               (clk                )
     , .rst               (rst                )

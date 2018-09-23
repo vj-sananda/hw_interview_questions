@@ -25,6 +25,9 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
+`ifndef __VERT_UCODE_QUICKSORT_PKG_VH__
+`define __VERT_UCODE_QUICKSORT_PKG_VH__
+
 package vert_ucode_quicksort_pkg;
 
   localparam int N = 16;
@@ -64,30 +67,195 @@ package vert_ucode_quicksort_pkg;
                                 } dequeue_fsm_t;
   localparam int DEQUEUE_FSM_BUSY_B  = 2;
 
-  typedef struct packed {
-    logic        vld;
-    w_t          dat;
-  } reg_t;
-
   typedef logic [7:0] pc_t;
-
-  localparam pc_t SYM_RESET  = 'd0;
-  localparam pc_t SYM_MAIN  = 'd32;
-  localparam pc_t SYM_PARTITION  = 'd64;
-  localparam pc_t SYM_QUICKSORT  = 'd96;
 
   typedef struct packed {
     logic        foo;
   } sort_context_t;
   localparam int SORT_CONTEXT_W  = $bits(sort_context_t);
-  
-  typedef struct packed {
-    logic        foo;
-  } inst_t;
+
+  typedef enum   logic [1:0] { UNCOND  = 2'b00,
+                               EQ      = 2'b01,
+                               GT      = 2'b10,
+                               LE      = 2'b11
+                               } cc_t;
+
+  typedef logic [2:0] imm_t;
+  typedef logic [7:0] field_A_t;
+
+  typedef enum        logic [2:0] { R0     = 3'b000,
+                                    R1     = 3'b001,
+                                    R2     = 3'b010,
+                                    R3     = 3'b011,
+                                    R4     = 3'b100,
+                                    R5     = 3'b101,
+                                    R6     = 3'b110,
+                                    BLINK  = 3'b111} reg_t;
+
+  typedef enum        logic [2:0] { REG_N
+                                    } reg_special_t;
+
+  typedef enum logic [3:0] { NOP    = 4'b0000,
+                             JCC    = 4'b0001,
+                             PP     = 4'b0010,
+                             MEM    = 4'b0100,
+                             MOV    = 4'b0110,
+                             ARITH  = 4'b0111,
+                             CRET   = 4'b1100,
+                             CNTRL  = 4'b1111
+                            } opcode_t;
 
   typedef struct packed {
-    logic        foo;
+    opcode_t opcode;
+    union packed {
+      struct packed {
+        logic [11:0] padding;
+      } nop;
+      struct  packed {
+        logic [1:0] padding;
+        cc_t cc;
+        field_A_t A;
+      } jcc;
+      struct  packed {
+        logic is_pop;
+        reg_t dst;
+        logic [7:0] padding;
+      } pp;
+      struct  packed {
+        logic is_st;
+        reg_t dst;
+        logic padding0;
+        reg_t src;
+        logic [3:0] padding1;
+      } mem;
+      struct  packed {
+        logic is_imm_or_special;
+        reg_t dst;
+        union packed {
+          struct packed {
+            logic padding0;
+            reg_t src;
+            logic [3:0] padding1;
+          } simple;
+          struct packed {
+            logic is_special;
+            struct packed {
+              reg_special_t special;
+              logic [3:0] padding;
+            } special;
+            struct packed {
+              logic [3:0] padding;
+              imm_t imm;
+            } immediate;
+          } imm_or_special;
+        } u;
+      } mov;
+      struct  packed {
+        logic is_sub;
+        reg_t dst;
+        logic wren;
+        reg_t src0;
+        logic is_imm;
+        union packed {
+          reg_t src1;
+          imm_t imm;
+        } u;
+      } arith;
+      struct  packed {
+        logic is_call;
+        logic [2:0] padding;
+        field_A_t a;
+      } cret;
+      struct  packed {
+        logic is_wait;
+        logic [10:0] padding;
+      } cntrl;
+    } u;
+  } inst_t;
+
+
+  typedef struct     packed {
+    logic            is_emit;
+    logic            is_wait;
+    logic            is_load;
+    logic            is_store;
+    logic            is_jump;
+    logic            is_push;
+    logic            is_pop;
+    
+    //
+    logic            dst_en;
+    reg_t            dst;
+
+    //
+    logic            src0_en;
+    reg_t            src0;
+    logic            src1_en;
+    reg_t            src1;
+
+    //
+    logic            src0_is_zero;
+
+    //
+    logic            has_imm;
+    imm_t            imm;
+
+    //
+    logic            has_special;
+    reg_special_t    special;
+
+    //
+    logic            inv_src1;
+    logic            cin;
+
+    //
+    logic            flag_en;
+
+    //
+    logic            invalid_inst;
+    
   } ucode_t;
+
+
+  function ucode_t decode(inst_t inst); begin
+    ucode_t ucode  = '0;
+    case (inst.opcode)
+      NOP: begin
+      end
+      JCC: begin
+      end
+      PP: begin
+      end
+      MEM: begin
+      end
+      MOV: begin
+      end
+      ARITH: begin
+      end
+      CRET: begin
+        case (inst.u.cret.is_call)
+          1'b1: begin
+            ucode.dst_en  = 'b1;
+            ucode.dst     = BLINK;
+          end
+          default: begin
+            ucode.src0_en  = 'b1;
+            ucode.src0     = BLINK;
+          end
+        endcase // case (inst.u.cret.is_call)
+      end
+      CNTRL: begin
+        ucode.is_emit  = (~inst.u.cntrl.is_wait);
+        ucode.is_wait  = inst.u.cntrl.is_wait;
+      end
+      default: begin
+        ucode.invalid_inst  = 'b1;
+      end
+    endcase // case (inst.opcode)
+    return ucode;
+  end endfunction
+    
 
 endpackage // fsm_quicksort_pkg
   
+`endif //  `ifndef __VERT_UCODE_QUICKSORT_PKG_VH__

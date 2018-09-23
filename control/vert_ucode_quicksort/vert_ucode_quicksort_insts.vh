@@ -28,58 +28,73 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
-task inst_nop; begin
-  inst_w  = '0;
+task inst_default; begin
+  inst_w      = '0;
+  inst_vld_w  = '1;
 end endtask
 
-task inst_mov; begin
-  inst_w  = '0;
-end endtask
-
-task inst_st; begin
-  inst_w  = '0;
-end endtask
-
-task inst_ld; begin
-  inst_w  = '0;
-end endtask
-
-task inst_add; begin
-  inst_w  = '0;
-end endtask
-
-task inst_sub; begin
-  inst_w  = '0;
-end endtask
-
-task inst_push; begin
-  inst_w  = '0;
-end endtask
-
-task inst_pop; begin
-  inst_w  = '0;
+task inst_j (pc_t dest, cc_t cc = UNCOND); begin
+  inst_default();
 end endtask
 
 task inst_wait; begin
-  inst_w  = '0;
+  inst_default();
 end endtask
 
-task inst_call; begin
-  inst_w  = '0;
+task inst_emit; begin
+  inst_default();
 end endtask
 
-task inst_b; begin
-  inst_w  = '0;
+task inst_call(pc_t dest); begin
+  inst_default();
 end endtask
 
 task inst_ret; begin
-  inst_w  = '0;
+  inst_default();
 end endtask
-   
-function inst_t decode (inst_t inst); begin
-  return '0;
-end endfunction
 
+task inst_push(reg_t r); begin
+  inst_default();
+end endtask
+
+task inst_pop(reg_t r); begin
+  inst_default();
+end endtask
+
+task inst_mov(reg_t dst, reg_t src0); begin
+  inst_default();
+end endtask
+
+task inst_movi(reg_t dst, imm_t imm); begin
+  inst_default();
+end endtask
+
+task inst_movs(reg_t dst, reg_special_t src1); begin
+  inst_default();
+end endtask
+
+task inst_addi(reg_t dst, reg_t src0, imm_t imm); begin
+  inst_default();
+end endtask
+
+task inst_subi(reg_t dst, reg_t src0, imm_t imm); begin
+  inst_default();
+end endtask
+
+task inst_sub(reg_t dst, reg_t src0, reg_t src1, bit dst_en = 'b1); begin
+  inst_default();
+end endtask
+
+task inst_ld(reg_t dst, reg_t src); begin
+  inst_default();
+end endtask
+
+task inst_st(reg_t dst, reg_t src); begin
+  inst_default();
+end endtask
+
+task inst_nop; begin
+end endtask
 
 `endif //  `ifndef __VERT_UCODE_QUICKSORT_INSTS_VH__
 
