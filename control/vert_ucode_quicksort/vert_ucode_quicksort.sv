@@ -594,6 +594,9 @@ module vert_ucode_quicksort (
 
       //
       case (1'b1)
+        ucode.is_ret:        fetch_pc_w  = rf__rdata [0];
+        
+        ucode.is_call,
         decode_taken_branch: fetch_pc_w  = ucode.target;
         default:             fetch_pc_w  = fetch_pc_r + 'b1;
       endcase // case (1'b1)
@@ -629,7 +632,7 @@ module vert_ucode_quicksort (
       rf__wa_w      = ucode.dst;
       priority casez ({ucode.is_pop, ucode.dst_is_blink})
         2'b1?:   rf__wdata_w  = stack__cmd_pop_dat_r;
-        2'b0?:   rf__wdata_w  = fetch_pc_r;
+        2'b01:   rf__wdata_w  = fetch_pc_r;
         default: rf__wdata_w  = adder__y;
       endcase // priority casez ({ucode.is_pop, ucode.dst_is_blink})
       

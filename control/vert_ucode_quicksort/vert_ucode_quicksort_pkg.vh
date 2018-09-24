@@ -177,6 +177,8 @@ package vert_ucode_quicksort_pkg;
   typedef struct     packed {
     logic            is_emit;
     logic            is_wait;
+    logic            is_call;
+    logic            is_ret;
     logic            is_load;
     logic            is_store;
     logic            is_jump;
@@ -243,6 +245,10 @@ package vert_ucode_quicksort_pkg;
     return inst[2:0];
   endfunction // I_field
 
+  function logic IMM_field(inst_t inst);
+    return inst[3];
+  endfunction // I_field
+
   function logic W_field(inst_t inst);
     return inst[7];
   endfunction // W_field
@@ -281,6 +287,8 @@ package vert_ucode_quicksort_pkg;
         ucode.is_pop   =  SEL_field(inst);
       end
       MEM: begin
+        ucode.is_load   = ~SEL_field(inst);
+        ucode.is_store  =  SEL_field(inst);
       end
       MOV: begin
         ucode.dst_en  = 'b1;
@@ -293,22 +301,28 @@ package vert_ucode_quicksort_pkg;
       end
       ARITH: begin
         ucode.dst_en    = W_field(inst);
-
         ucode.src0_en   = 'b1;
-        ucode.src1_en   = (~inst [3]);
-
-        ucode.has_imm   = inst [3];
-
-        ucode.inv_src1  = SEL_field(inst);
-        ucode.cin       = SEL_field(inst);
+        if (IMM_field(inst))
+          ucode.has_imm  = 'b1;
+        else
+          ucode.src1_en  = 'b1;
+        if (SEL_field(inst)) begin
+          ucode.inv_src1  = 'b1;
+          ucode.cin       = 'b1;
+        end
       end
       CRET: begin
+        ucode.is_jump  = 'b1;
         case (SEL_field(inst))
           1'b1: begin
-            ucode.dst_en  = 'b1;
-            ucode.dst     = BLINK;
+            // CALL
+            ucode.is_call  = 'b1;
+            ucode.dst_en   = 'b1;
+            ucode.dst      = BLINK;
           end
           default: begin
+            // RET
+            ucode.is_ret   = 'b1;
             ucode.src0_en  = 'b1;
             ucode.src0     = BLINK;
           end
