@@ -87,12 +87,6 @@ module vert_ucode_quicksort (
     bank_n_t     idx;
   } dequeue_momento_t;
 
-  typedef struct packed {
-    logic        is_dat_p;
-    logic        is_dat_i;
-    logic        is_dat_j;
-  } sort_momento_t;
-
   bank_state_t   [BANK_N-1:0]           bank_state_r;
   bank_state_t   [BANK_N-1:0]           bank_state_w;
   logic          [BANK_N-1:0]           bank_state_en;
@@ -173,21 +167,15 @@ module vert_ucode_quicksort (
   logic                                 stack__empty_r;
   logic                                 stack__full_r;
   //
-  sort_momento_t                        sort_momento_in;
-  sort_momento_t                        sort_momento_out_r;
+  logic                                 sort_momento_in;
+  logic                                 sort_momento_out_r;
   //
   pc_t                                  fetch_pc_r;
   pc_t                                  fetch_pc_w;
   logic                                 fetch_pc_en;
   //
-  pc_t                                  decode_pc_r;
-  pc_t                                  decode_pc_w;
-  logic                                 decode_pc_en;
-  //
-  pc_t                                  fetch_pc_next_w;
-  //
-  logic                                 inst_vld_w;
-  logic                                 inst_vld_r;
+  logic                                 decode_vld_w;
+  logic                                 decode_vld_r;
   //
   inst_t                                inst_r;
   inst_t                                inst_w;
@@ -205,6 +193,7 @@ module vert_ucode_quicksort (
   //
   logic                                 flag_z_w;
   logic                                 flag_n_w;
+  logic                                 flag_c_w;
   //
   logic                                 flag_z_r;
   logic                                 flag_n_r;
@@ -223,6 +212,11 @@ module vert_ucode_quicksort (
   //
   logic                                 fetch_adv;
   logic                                 decode_adv;
+  logic                                 cc_hit;
+  logic                                 decode_taken_branch;
+  //
+  logic                                 decode_ld_stall_r;
+  logic                                 decode_ld_stall_w;
   
   // ======================================================================== //
   //                                                                          //
@@ -470,7 +464,6 @@ module vert_ucode_quicksort (
   always_comb
     begin : quicksort_prog_PROC
 
-      inst_vld_w  = '0;
       inst_w      = '0;
 
       // Control Store
@@ -559,90 +552,103 @@ module vert_ucode_quicksort (
     begin : datapath_PROC
 
       //
-      ucode            = decode(inst_r);
+      ucode  = decode(inst_r);
 
       //
-      unique case (1'b1)
-        ucode.is_wait: decode_adv  = queue_ready [sort_bank_idx_r];
-        default:       decode_adv  = inst_vld_r;
-      endcase // unique case (1'b1)
+      case (decode_ld_stall_r)
+        1'b1:    decode_ld_stall_w = (~sort_momento_out_r);
+        default: decode_ld_stall_w = decode_vld_r & ucode.is_load;
+      endcase // case (decode_ld_stall_r)
+
+      //
+      priority case (1'b1)
+        decode_ld_stall_r: decode_stall  = (~sort_momento_out_r);
+        ucode.is_wait:     decode_stall  = (~queue_ready [sort_bank_idx_r]);
+        default:           decode_stall  = 'b0;
+      endcase
+
+      //
+      unique case (ucode.cc)
+        EQ:      cc_hit  = flag_z_r;
+        GT:      cc_hit  = (~flag_z_r) & (~flag_n_r);
+        LE:      cc_hit  = flag_z_r | flag_n_r;
+        default: cc_hit  = 1'b1;
+      endcase // unique case (ucode.cc)
       
       //
-      fetch_adv         = '0;
-
-      //
-      inst_en           = '0;
+      decode_taken_branch  = ucode.is_jump && cc_hit;
       
       //
-      fetch_pc_en       = '0;
-      fetch_pc_next_w   = fetch_pc_next_r + 'b1;
+      decode_adv           = decode_vld_r & (~decode_stall);
 
       //
-      case (1'b0)
-        default: fetch_pc_w  = pc_next_w;
-      endcase // case (1'b0)
+      fetch_kill           = decode_adv & decode_taken_branch;
+      fetch_adv            = decode_adv & (~decode_taken_branch);
 
-      decode_pc_en  = '0;
-      decode_pc_w   = fetch_pc_r;
+      //
+      inst_en              = fetch_adv;
+      decode_vld_w         = fetch_adv;
+      
+      //
+      fetch_pc_en          = (fetch_adv | fetch_kill);
+
+      //
+      case (1'b1)
+        decode_taken_branch: fetch_pc_w  = ucode.target;
+        default:             fetch_pc_w  = fetch_pc_r + 'b1;
+      endcase // case (1'b1)
 
       //
       rf__ra        = {ucode.src1, ucode.src0};
       
       //
       src0_is_wrbk  = rf__wen_r & (rf__ra [0] == rf__wa_r);
-
-      //
-      case (1'b1)
-        src0_is_wrbk: src0  = rf__wdata_r;
-        default:      src0  = rf__rdata [0];
-      endcase // case (1'b0)
+      src0          = src0_is_wrbk ? rf__wdata_r : rf__rdata [0];
 
       //
       src1_is_wrbk  = rf__wen_r & (rf__ra [1] == rf__wa_r);
+      src1          = src1_is_wrbk ? rf__wdata_r : rf__rdata [1];
 
       //
-      case (1'b0)
-        src1_is_wrbk: src1  = rf__wdata_r;
-        default:      src1  = rf__rdata [1];
-      endcase // case (1'b0)
-
-      //
-      rf__ren [0]  = ucode.src0_en & (~src0_is_wrbk);
-      rf__ren [1]  = ucode.src1_en & (~src1_is_wrbk);
+      rf__ren [0]   = ucode.src0_en & (~src0_is_wrbk);
+      rf__ren [1]   = ucode.src1_en & (~src1_is_wrbk);
       
       //
-      unique case ({ucode.src0_is_zero})
-        1'b1:    adder__a  = '0;
-        default: adder__a  = src0;
-      endcase // case (1'b0)
+      adder__a      = ucode.src0_is_zero ? '0 : src0;
+      adder__b      = ucode.has_imm ? w_t'(ucode.imm) : (src1 ^ {W{ucode.inv_src1}});
+      adder__cin    = ucode.cin;
 
       //
-      unique case ({ucode.has_imm})
-        1'b1:    adder__b  = w_t'(ucode.imm);
-        default: adder__b  = src1 ^ {W{ucode.inv_src1}};
-      endcase // case (1'b0)
+      flag_en       = decode_adv & ucode.flag_en;
+      flag_c_w      = adder__cout;
+      flag_n_w      = adder__y [W - 1];
+      flag_z_w      = (adder__y == '0);
 
       //
-      adder__cin  = ucode.cin;
-
+      rf__wen_w     = decode_adv & ucode.dst_en & ((~ucode.is_load) | sort_momento_out_r);
+      rf__wa_w      = ucode.dst;
+      priority casez ({ucode.is_pop, ucode.dst_is_blink})
+        2'b1?:   rf__wdata_w  = stack__cmd_pop_dat_r;
+        2'b0?:   rf__wdata_w  = fetch_pc_r;
+        default: rf__wdata_w  = adder__y;
+      endcase // priority casez ({ucode.is_pop, ucode.dst_is_blink})
+      
       //
-      flag_en     = decode_adv & ucode.flag_en;
-      flag_n_w    = adder__y [W - 1];
-      flag_z_w    = (adder__y == '0);
+      sort__en             = decode_adv & (ucode.is_store | ucode.is_load);
+      sort__wen            = ucode.is_store;
+      sort__addr           = rf__rdata [0];
+      sort__din            = rf__rdata [1];
 
+      // The 'momento' in this version is essentially just the rdata valid
+      // as it is unnecessary to explicitly retain any state about the
+      // operation.
       //
-      rf__wen_w   = ucode.dst_en;
-      case (1'b0)
-        default: begin
-          rf__wa_w     = ucode.dst;
-          rf__wdata_w  = adder__y;
-        end
-      endcase // case (1'b0)
+      sort_momento_in      = sort__en & (~sort__wen);
 
       //
       stack__cmd_vld       = decode_adv & (ucode.is_push | ucode.is_pop);
       stack__cmd_push      = ucode.is_push;
-      stack__cmd_push_dat  = adder__y;
+      stack__cmd_push_dat  = rf__rdata [0];
       stack__cmd_clr       = '0;
 
       //
@@ -851,9 +857,17 @@ module vert_ucode_quicksort (
   //
   always_ff @(posedge clk)
     if (rst)
-      {flag_z_r, flag_n_r} <= 'b0;
+      decode_ld_stall_r <= 'b0;
+    else
+      decode_ld_stall_r <= decode_ld_stall_w;
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      {flag_z_r, flag_n_r, flag_c_r} <= 'b0;
     else if (flag_en)
-      {flag_z_r, flag_n_r} <= {flag_z_w, flag_n_w};
+      {flag_z_r, flag_n_r, flag_c_r} <= {flag_z_w, flag_n_w, flag_c_w};
   
   // ------------------------------------------------------------------------ //
   //
@@ -943,9 +957,9 @@ module vert_ucode_quicksort (
   //
   always_ff @(posedge clk)
     if (rst)
-      inst_vld_r <= '0;
+      decode_vld_r <= '0;
     else
-      inst_vld_r <= inst_vld_w;
+      decode_vld_r <= decode_vld_w;
   
   // ------------------------------------------------------------------------ //
   //
@@ -1026,7 +1040,7 @@ module vert_ucode_quicksort (
 
   // ------------------------------------------------------------------------ //
   //
-  stack #(.W(W), .N(16)) u_stack (
+  stack #(.W(W), .N(128)) u_stack (
     //
       .clk               (clk                )
     , .rst               (rst                )
@@ -1055,7 +1069,7 @@ module vert_ucode_quicksort (
 
   // ------------------------------------------------------------------------ //
   //
-  delay_pipe #(.W($bits(sort_momento_t)), .N(1)) u_sort_momento_delay_pipe (
+  delay_pipe #(.W(1), .N(1)) u_sort_momento_delay_pipe (
     //
       .clk               (clk                     )
     , .rst               (rst                     )

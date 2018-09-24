@@ -30,7 +30,6 @@
 
 task inst_default; begin
   inst_w      = '0;
-  inst_vld_w  = '1;
 end endtask
 
 task inst_j (pc_t dest, cc_t cc = UNCOND); begin
