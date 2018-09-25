@@ -234,7 +234,7 @@ package vert_ucode_quicksort_pkg;
   endfunction // S_field
 
   function logic [2:0] SPECIAL_field(inst_t inst);
-    return inst[6:4];
+    return inst[2:0];
   endfunction // SPECIAL_field
 
   function logic [2:0] U_field(inst_t inst);
@@ -266,6 +266,7 @@ package vert_ucode_quicksort_pkg;
   endfunction // CC_field
 
   function ucode_t decode(inst_t inst); begin
+    logic sel      = SEL_field(inst);
     ucode_t ucode  = '0;
     // COMMON
     ucode.imm      = I_field(inst);
@@ -280,57 +281,89 @@ package vert_ucode_quicksort_pkg;
       NOP: begin
       end
       JCC: begin
+        // Jcc
         ucode.is_jump  = 'b1;
       end
       PP: begin
-        ucode.is_push  = ~SEL_field(inst);
-        ucode.is_pop   =  SEL_field(inst);
+        case (sel)
+          1'b1: begin
+            // POP
+            ucode.is_pop        = 'b1;
+            ucode.src1_en       = 'b1;
+            ucode.src0_is_zero  = 'b1;
+          end
+          default: begin
+            // PUSH
+            ucode.is_push  = 'b1;
+            ucode.dst_en   = 'b1;
+          end
+        endcase
       end
       MEM: begin
-        ucode.is_load   = ~SEL_field(inst);
-        ucode.is_store  =  SEL_field(inst);
+        ucode.src1_en   = 'b1;
+        case (sel)
+          1'b1: begin
+            // ST
+            ucode.is_store  = 'b1;
+            ucode.src0_en   = 'b1;
+          end
+          default: begin
+            // LD
+            ucode.is_load  = 'b1;
+            ucode.dst_en   = 'b1;
+          end
+        endcase // case (sel)
       end
       MOV: begin
-        ucode.dst_en  = 'b1;
-        casez ({inst[11],inst[7]})
-          2'b0?:   ucode.src0_en  = 'b1;     // MOV
-          2'b10:   ucode.has_imm  = 'b1;     // MOVI
-          2'b11:   ucode.has_special  = 'b1; // MOVS
-          default: ucode.invalid_inst  = 'b1;
-        endcase // casez ({inst[11],inst[7]})
+        ucode.dst_en        = 'b1;
+        ucode.src0_is_zero  = 'b1;
+        unique0 casez ({inst[11],inst[3]})
+          // MOV
+          2'b00:   ucode.src1_en      = 'b1;
+          // MOVI
+          2'b01:   ucode.has_imm      = 'b1;
+          // MOVS
+          2'b1?:   ucode.has_special  = 'b1;
+        endcase // unique0 casez ({inst[11],inst[3]})
       end
       ARITH: begin
         ucode.dst_en    = W_field(inst);
         ucode.src0_en   = 'b1;
         if (IMM_field(inst))
+          // {ADD,SUB}I
           ucode.has_imm  = 'b1;
         else
+          // {ADD,SUB}
           ucode.src1_en  = 'b1;
-        if (SEL_field(inst)) begin
+        if (sel) begin
+          // SUB
           ucode.inv_src1  = 'b1;
           ucode.cin       = 'b1;
         end
       end
       CRET: begin
-        ucode.is_jump  = 'b1;
-        case (SEL_field(inst))
+        ucode.is_jump       = 'b1;
+        ucode.src0_is_zero  = 'b1;
+        case (sel)
           1'b1: begin
+            // RET
+            ucode.is_ret   = 'b1;
+            ucode.src1_en  = 'b1;
+            ucode.src1     = BLINK;
+          end
+          default: begin
             // CALL
             ucode.is_call  = 'b1;
             ucode.dst_en   = 'b1;
             ucode.dst      = BLINK;
           end
-          default: begin
-            // RET
-            ucode.is_ret   = 'b1;
-            ucode.src0_en  = 'b1;
-            ucode.src0     = BLINK;
-          end
         endcase // case (inst.u.cret.is_call)
       end
       CNTRL: begin
-        ucode.is_emit  = ~SEL_field(inst);
-        ucode.is_wait  =  SEL_field(inst);
+        if (sel)
+          ucode.is_wait  = 'b1;
+        else
+          ucode.is_emit  = 'b1;
       end
       default: begin
         ucode.invalid_inst  = 'b1;

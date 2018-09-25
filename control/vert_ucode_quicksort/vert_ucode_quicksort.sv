@@ -340,7 +340,7 @@ module vert_ucode_quicksort (
   //
   // Algorithm:
   //
-  // function partition (A, lo, hi) is
+  // function partition (lo, hi) is
   //   pivot := A[hi];
   //   i := lo;
   //   for j := lo to hi - 1 do
@@ -350,15 +350,16 @@ module vert_ucode_quicksort (
   //   swap A[i] with A[hi];
   //   return i;
   //
-  // function quicksort (A, lo, hi) is
+  // function quicksort (lo, hi) is
   //   if lo < hi:
-  //     p := partition(A, lo, hi)
-  //     quicksort(A, lo, p - 1)
-  //     quicksort(A, p + 1, hi)
+  //     p := partition(lo, hi)
+  //     quicksort(lo, p - 1)
+  //     quicksort(p + 1, hi)
   //
   //        XXXX_YYYY_YYYY_YYYY
   //  -------------------------
   //    NOP 0000_XXXX_XXXX_XXXX
+  //
   //    Jcc 0001_XXcc_AAAA_AAAA
   //
   //     00 - "" Unconditional
@@ -367,14 +368,14 @@ module vert_ucode_quicksort (
   //     11 - "LE" Less-Than or Equal
   //
   //   PUSH 0010_0rrr_XXXX_XXXX
-  //    POP 0010_1rrr_XXXX_XXXX
+  //    POP 0010_1XXX_XXXX_Xuuu
   //
-  //     LD 0100_0rrr_Xsss_XXXX
-  //     ST 0100_1rrr_Xsss_XXXX
+  //     LD 0100_0rrr_XXXX_Xuuu
+  //     ST 0100_1XXX_Xsss_Xuuu
   //
-  //    MOV 0110_0rrr_Xsss_XXXX
-  //   MOVI 0110_1rrr_0XXX_Xiii
-  //   MOVS 0110_1rrr_1SSS_XXXX
+  //    MOV 0110_0rrr_XXXX_0uuu
+  //   MOVI 0110_0rrr_XXXX_1iii
+  //   MOVS 0110_1rrr_XXXX_XSSS
   //
   //    ADD 0111_0rrr_Wsss_0uuu
   //   ADDI 0111_0rrr_Wsss_1iii
@@ -617,7 +618,7 @@ module vert_ucode_quicksort (
       rf__ren [1]   = ucode.src1_en & (~src1_is_wrbk);
       
       //
-      adder__a      = ucode.src0_is_zero ? '0 : src0;
+      adder__a      = src0 & {W{~ucode.src0_is_zero}};
       adder__b      = ucode.has_imm ? w_t'(ucode.imm) : (src1 ^ {W{ucode.inv_src1}});
       adder__cin    = ucode.cin;
 
