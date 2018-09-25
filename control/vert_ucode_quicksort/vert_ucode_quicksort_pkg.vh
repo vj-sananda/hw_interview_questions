@@ -288,14 +288,14 @@ package vert_ucode_quicksort_pkg;
         case (sel)
           1'b1: begin
             // POP
-            ucode.is_pop        = 'b1;
-            ucode.src1_en       = 'b1;
-            ucode.src0_is_zero  = 'b1;
+            ucode.is_pop  = 'b1;
+            ucode.dst_en  = 'b1;
           end
           default: begin
             // PUSH
-            ucode.is_push  = 'b1;
-            ucode.dst_en   = 'b1;
+            ucode.is_push       = 'b1;
+            ucode.src1_en       = 'b1;
+            ucode.src0_is_zero  = 'b1;
           end
         endcase
       end
