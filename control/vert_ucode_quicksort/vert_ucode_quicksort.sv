@@ -367,8 +367,8 @@ module vert_ucode_quicksort (
   //     10 - "GT" Greather-Than
   //     11 - "LE" Less-Than or Equal
   //
-  //   PUSH 0010_0rrr_XXXX_XXXX
-  //    POP 0010_1XXX_XXXX_Xuuu
+  //   PUSH 0010_0XXX_XXXX_Xuuu
+  //    POP 0010_1rrr_XXXX_XXXX
   //
   //     LD 0100_0rrr_XXXX_Xuuu
   //     ST 0100_1XXX_Xsss_Xuuu
