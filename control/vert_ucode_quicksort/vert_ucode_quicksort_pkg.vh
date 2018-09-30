@@ -118,7 +118,7 @@ package vert_ucode_quicksort_pkg;
       } jcc;
       struct  packed {
         logic is_pop;
-        reg_t dst;
+        reg_t dst; // TODO: rename
         logic [7:0] padding;
       } pp;
       struct  packed {

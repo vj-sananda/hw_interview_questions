@@ -29,67 +29,131 @@
 //========================================================================== //
 
 task inst_default; begin
-  inst_w      = '0;
+  da_inst_w  = '0;
 end endtask
 
 task inst_j (pc_t dest, cc_t cc = UNCOND); begin
   inst_default();
+  //
+  da_inst_w.opcode    = JCC;
+  da_inst_w.u.jcc.cc  = cc;
+  da_inst_w.u.jcc.A   = field_A_t'(dest);
 end endtask
 
 task inst_wait; begin
   inst_default();
+  //
+  da_inst_w.opcode           = CNTRL;
+  da_inst_w.u.cntrl.is_wait  = 'b1;
 end endtask
 
 task inst_emit; begin
   inst_default();
+  //
+  da_inst_w.opcode  = CNTRL;
 end endtask
 
 task inst_call(pc_t dest); begin
   inst_default();
+  //
+  da_inst_w.opcode          = CRET;
+  da_inst_w.u.cret.is_call  = 'b1;
+  da_inst_w.u.cret.a        = field_A_t'(dest);
 end endtask
 
 task inst_ret; begin
   inst_default();
+  //
+  da_inst_w.opcode  = CRET;
 end endtask
 
 task inst_push(reg_t r); begin
   inst_default();
+  //
+  da_inst_w.opcode    = PP;
+  da_inst_w.u.pp.dst  = r;
 end endtask
 
 task inst_pop(reg_t r); begin
   inst_default();
+  //
+  da_inst_w.opcode     = PP;
+  da_inst_w.u.pp.is_pop  = 'b1;
+  da_inst_w.u.pp.dst     = r;
 end endtask
 
 task inst_mov(reg_t dst, reg_t src0); begin
   inst_default();
+  //
+  da_inst_w.opcode             = MOV;
+  da_inst_w.u.mov.dst          = dst;
+  da_inst_w.u.mov.u.simple.src  = src0;
 end endtask
 
 task inst_movi(reg_t dst, imm_t imm); begin
   inst_default();
+  //
+  da_inst_w.opcode                                = MOV;
+  da_inst_w.u.mov.is_imm_or_special               = 'b1;
+  da_inst_w.u.mov.u.imm_or_special.immediate.imm  = imm;
 end endtask
 
 task inst_movs(reg_t dst, reg_special_t src1); begin
   inst_default();
+  //
+  da_inst_w.opcode                                  = MOV;
+  da_inst_w.u.mov.is_imm_or_special                 = 'b1;
+  da_inst_w.u.mov.u.imm_or_special.is_special       = 'b1;
+  da_inst_w.u.mov.u.imm_or_special.special.special  = src1;
 end endtask
 
 task inst_addi(reg_t dst, reg_t src0, imm_t imm); begin
   inst_default();
+  //
+  da_inst_w.opcode          = ARITH;
+  da_inst_w.u.arith.dst     = dst;
+  da_inst_w.u.arith.src0    = src0;
+  da_inst_w.u.arith.is_imm  = 'b1;
+  da_inst_w.u.arith.u.imm   = imm;
 end endtask
 
 task inst_subi(reg_t dst, reg_t src0, imm_t imm); begin
   inst_default();
+  //
+  da_inst_w.opcode          = ARITH;
+  da_inst_w.u.arith.is_sub  = 'b1;
+  da_inst_w.u.arith.dst     = dst;
+  da_inst_w.u.arith.src0    = src0;
+  da_inst_w.u.arith.is_imm  = 'b1;
+  da_inst_w.u.arith.u.imm   = imm;
 end endtask
 
 task inst_sub(reg_t dst, reg_t src0, reg_t src1, bit dst_en = 'b1); begin
   inst_default();
+  //
+  da_inst_w.opcode          = ARITH;
+  da_inst_w.u.arith.is_sub  = 'b1;
+  da_inst_w.u.arith.wren    = dst_en;
+  da_inst_w.u.arith.dst     = dst;
+  da_inst_w.u.arith.src0    = src0;
+  da_inst_w.u.arith.u.src1  = src1;
 end endtask
 
 task inst_ld(reg_t dst, reg_t src); begin
   inst_default();
+  //
+  da_inst_w.opcode     = MEM;
+  da_inst_w.u.mem.dst  = dst;
+  da_inst_w.u.mem.src  = src;  
 end endtask
 
 task inst_st(reg_t dst, reg_t src); begin
   inst_default();
+  //
+  da_inst_w.opcode       = MEM;
+  da_inst_w.u.mem.is_st  = 'b1;
+  da_inst_w.u.mem.dst    = dst;
+  da_inst_w.u.mem.src    = src;  
 end endtask
 
 task inst_nop; begin

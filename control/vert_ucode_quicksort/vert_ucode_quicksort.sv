@@ -170,53 +170,62 @@ module vert_ucode_quicksort (
   logic                                 sort_momento_in;
   logic                                 sort_momento_out_r;
   //
-  pc_t                                  fetch_pc_r;
-  pc_t                                  fetch_pc_w;
-  logic                                 fetch_pc_en;
-  //
-  logic                                 decode_vld_w;
-  logic                                 decode_vld_r;
-  //
-  inst_t                                inst_r;
-  inst_t                                inst_w;
-  logic                                 inst_en;
-  //
-  ucode_t                               ucode;
-  //
   w_t                                   adder__y;
   logic                                 adder__cout;
   w_t                                   adder__a;
+  w_t                                   adder__b_pre;
   w_t                                   adder__b;
   logic                                 adder__cin;
   //
-  logic                                 flag_en;
+  logic                                 ar_flag_en;
   //
-  logic                                 flag_z_w;
-  logic                                 flag_n_w;
-  logic                                 flag_c_w;
+  logic                                 ar_flag_z_w;
+  logic                                 ar_flag_n_w;
+  logic                                 ar_flag_c_w;
   //
-  logic                                 flag_z_r;
-  logic                                 flag_n_r;
+  logic                                 ar_flag_z_r;
+  logic                                 ar_flag_n_r;
+  logic                                 ar_flag_c_r;
   //
-  reg_t [1:0]                           rf__ra;
-  logic [1:0]                           rf__ren;
-  w_t   [1:0]                           rf__rdata;
+  reg_t [1:0]                           da_rf__ra;
+  logic [1:0]                           da_rf__ren;
+  w_t   [1:0]                           da_rf__rdata;
   //
-  reg_t                                 rf__wa_w;
-  logic                                 rf__wen_w;
-  w_t                                   rf__wdata_w;
+  reg_t                                 da_rf__wa_w;
+  logic                                 da_rf__wen_w;
+  w_t                                   da_rf__wdata_w;
   //
-  reg_t                                 rf__wa_r;
-  logic                                 rf__wen_r;
-  w_t                                   rf__wdata_r;
+  reg_t                                 da_rf__wa_r;
+  logic                                 da_rf__wen_r;
+  w_t                                   da_rf__wdata_r;
   //
-  logic                                 fetch_adv;
-  logic                                 decode_adv;
-  logic                                 cc_hit;
-  logic                                 decode_taken_branch;
+  logic                                 fa_kill;
+  logic                                 fa_valid;
+  logic                                 fa_adv;
+  logic                                 fa_pass;
+  pc_t                                  fa_pc_r;
+  pc_t                                  fa_pc_w;
+  logic                                 fa_pc_en;
   //
-  logic                                 decode_ld_stall_r;
-  logic                                 decode_ld_stall_w;
+  logic                                 da_en;
+  logic                                 da_stall;
+  logic                                 da_adv;
+  logic                                 da_valid_w;
+  logic                                 da_valid_r;
+  logic                                 da_cc_hit;
+  logic                                 da_taken_branch;
+  logic                                 da_ld_stall_r;
+  logic                                 da_ld_stall_w;
+  //
+  logic                                 da_src0_is_wrbk;
+  w_t                                   da_src0;
+  logic                                 da_src1_is_wrbk;
+  w_t                                   da_src1;
+  //
+  ucode_t                               da_ucode;
+  //
+  inst_t                                da_inst_r;
+  inst_t                                da_inst_w;
   
   // ======================================================================== //
   //                                                                          //
@@ -465,7 +474,7 @@ module vert_ucode_quicksort (
   always_comb
     begin : quicksort_prog_PROC
 
-      inst_w      = '0;
+      da_inst_w  = '0;
 
       // Control Store
       //
@@ -474,7 +483,7 @@ module vert_ucode_quicksort (
       // tool can automatically infer a ROM from this table, otherwise, the
       // microcode would need to be hand assembled and loaded as a HEX-file.
       
-      case (fetch_pc_r)
+      case (fa_pc_r)
         //
         SYM_RESET          : inst_j(SYM_START);
 
@@ -553,95 +562,149 @@ module vert_ucode_quicksort (
     begin : datapath_PROC
 
       //
-      ucode  = decode(inst_r);
+      da_ucode  = decode(da_inst_r);
 
       //
-      case (decode_ld_stall_r)
-        1'b1:    decode_ld_stall_w = (~sort_momento_out_r);
-        default: decode_ld_stall_w = decode_vld_r & ucode.is_load;
-      endcase // case (decode_ld_stall_r)
+      unique case (da_ucode.cc)
+        EQ:      da_cc_hit  = ar_flag_z_r;
+        GT:      da_cc_hit  = (~ar_flag_z_r) & (~ar_flag_n_r);
+        LE:      da_cc_hit  = ar_flag_z_r | ar_flag_n_r;
+        default: da_cc_hit  = 1'b1;
+      endcase // unique case (da_ucode.cc)
+      
+      //
+      da_taken_branch  = da_valid_r & da_ucode.is_jump && da_cc_hit;
+
+      //
+      fa_kill          = da_taken_branch;
+      fa_valid         = (~fa_kill);
+      fa_pass          = fa_valid & (~fa_kill);
+
+      //
+      case (da_ld_stall_r)
+        1'b1:    da_ld_stall_w  = (~sort_momento_out_r);
+        default: da_ld_stall_w  = da_valid_r & da_ucode.is_load;
+      endcase // case (da_ld_stall_r)
 
       //
       priority case (1'b1)
-        decode_ld_stall_r: decode_stall  = (~sort_momento_out_r);
-        ucode.is_wait:     decode_stall  = (~queue_ready [sort_bank_idx_r]);
-        default:           decode_stall  = 'b0;
-      endcase
+        da_ucode.is_wait: da_stall  = (~queue_ready [sort_bank_idx_r]);
+        default:          da_stall  = (~da_ld_stall_w);
+      endcase // priority case (1'b1)
+
+      da_valid_w  = fa_pass & (~da_stall);
+      da_adv      = da_valid_r & (~da_stall);
+      da_en       = fa_pass & (~da_stall);
 
       //
-      unique case (ucode.cc)
-        EQ:      cc_hit  = flag_z_r;
-        GT:      cc_hit  = (~flag_z_r) & (~flag_n_r);
-        LE:      cc_hit  = flag_z_r | flag_n_r;
-        default: cc_hit  = 1'b1;
-      endcase // unique case (ucode.cc)
-      
-      //
-      decode_taken_branch  = ucode.is_jump && cc_hit;
-      
-      //
-      decode_adv           = decode_vld_r & (~decode_stall);
+      da_rf__ra        = {da_ucode.src1, da_ucode.src0};
 
       //
-      fetch_kill           = decode_adv & decode_taken_branch;
-      fetch_adv            = decode_adv & (~decode_taken_branch);
+      da_src0_is_wrbk  = da_rf__wen_r & (da_rf__ra [0] == da_rf__wa_r);
+      da_src1_is_wrbk  = da_rf__wen_r & (da_rf__ra [1] == da_rf__wa_r);
 
       //
-      inst_en              = fetch_adv;
-      decode_vld_w         = fetch_adv;
+      da_rf__ren [0]   = da_ucode.src0_en & (~da_src0_is_wrbk);
+      da_rf__ren [1]   = da_ucode.src1_en & (~da_src1_is_wrbk);
+
+    end // block: datapath_PROC
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : exe_PROC
       
       //
-      fetch_pc_en          = (fetch_adv | fetch_kill);
+      da_src0          = da_src0_is_wrbk ? da_rf__wdata_r : da_rf__rdata [0];
+
+      //
+      da_src1          = da_src1_is_wrbk ? da_rf__wdata_r : da_rf__rdata [1];
+      
+      //
+      adder__a         = da_src0 & {W{~da_ucode.src0_is_zero}};
+      casez ({da_ucode.has_special, da_ucode.has_imm})
+        // Presently, only the CONTEXT.N special register has been
+        // implemented.
+        2'b1?:   adder__b_pre  = w_t'(bank_state_r [sort_bank_idx_r].n);
+        2'b01:   adder__b_pre  = w_t'(da_ucode.imm);
+        default: adder__b_pre  = da_src1;
+      endcase // casez ({ucode.has_special, ucode.has_imm})
+      adder__b      = adder__b_pre ^ {W{da_ucode.inv_src1}};
+      adder__cin    = da_ucode.cin;
+
+    end // block: exe_PROC
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : fa_pc_PROC
+      
+      //
+      fa_pc_en    = (fa_adv | fa_kill);
 
       //
       case (1'b1)
-        ucode.is_ret:        fetch_pc_w  = rf__rdata [0];
+        da_ucode.is_ret:  fa_pc_w  = pc_t'(da_rf__rdata [0]);
         
-        ucode.is_call,
-        decode_taken_branch: fetch_pc_w  = ucode.target;
-        default:             fetch_pc_w  = fetch_pc_r + 'b1;
+        da_ucode.is_call,
+          da_taken_branch:  fa_pc_w  = da_ucode.target;
+        default:          fa_pc_w  = fa_pc_r + 'b1;
       endcase // case (1'b1)
 
-      //
-      rf__ra        = {ucode.src1, ucode.src0};
-      
-      //
-      src0_is_wrbk  = rf__wen_r & (rf__ra [0] == rf__wa_r);
-      src0          = src0_is_wrbk ? rf__wdata_r : rf__rdata [0];
+    end // block: fa_pc_PROC
+
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : da_rf_PROC
 
       //
-      src1_is_wrbk  = rf__wen_r & (rf__ra [1] == rf__wa_r);
-      src1          = src1_is_wrbk ? rf__wdata_r : rf__rdata [1];
-
-      //
-      rf__ren [0]   = ucode.src0_en & (~src0_is_wrbk);
-      rf__ren [1]   = ucode.src1_en & (~src1_is_wrbk);
-      
-      //
-      adder__a      = src0 & {W{~ucode.src0_is_zero}};
-      adder__b      = ucode.has_imm ? w_t'(ucode.imm) : (src1 ^ {W{ucode.inv_src1}});
-      adder__cin    = ucode.cin;
-
-      //
-      flag_en       = decode_adv & ucode.flag_en;
-      flag_c_w      = adder__cout;
-      flag_n_w      = adder__y [W - 1];
-      flag_z_w      = (adder__y == '0);
-
-      //
-      rf__wen_w     = decode_adv & ucode.dst_en & ((~ucode.is_load) | sort_momento_out_r);
-      rf__wa_w      = ucode.dst;
-      priority casez ({ucode.is_pop, ucode.dst_is_blink})
-        2'b1?:   rf__wdata_w  = stack__cmd_pop_dat_r;
-        2'b01:   rf__wdata_w  = fetch_pc_r;
-        default: rf__wdata_w  = adder__y;
+      da_rf__wen_w  = da_adv & da_ucode.dst_en;
+      da_rf__wa_w   = da_ucode.dst;
+      priority casez ({da_ucode.is_pop, da_ucode.dst_is_blink})
+        2'b1?:   da_rf__wdata_w  = stack__cmd_pop_dat_r;
+        2'b01:   da_rf__wdata_w  = w_t'(fa_pc_r);
+        default: da_rf__wdata_w  = adder__y;
       endcase // priority casez ({ucode.is_pop, ucode.dst_is_blink})
+
+    end // block: da_rf_PROC
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : ar_flags_PROC
+
+      //
+      ar_flag_en       = da_adv & da_ucode.flag_en;
+      ar_flag_c_w      = adder__cout;
+      ar_flag_n_w      = adder__y [W - 1];
+      ar_flag_z_w      = (adder__y == '0);
+
+    end // block: da_flags_PROC
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : stack_PROC
+
+      //
+      stack__cmd_vld       = da_adv & (da_ucode.is_push | da_ucode.is_pop);
+      stack__cmd_push      = da_ucode.is_push;
+      stack__cmd_push_dat  = da_rf__rdata [0];
+      stack__cmd_clr       = '0;
+
+    end // block: stack_PROC
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : sort_PROC
       
       //
-      sort__en             = decode_adv & (ucode.is_store | ucode.is_load);
-      sort__wen            = ucode.is_store;
-      sort__addr           = rf__rdata [0];
-      sort__din            = rf__rdata [1];
+      sort__en             = da_adv & (da_ucode.is_store | da_ucode.is_load);
+      sort__wen            = da_ucode.is_store;
+      sort__addr           = addr_t'(da_rf__rdata [0]);
+      sort__din            = da_rf__rdata [1];
 
       // The 'momento' in this version is essentially just the rdata valid
       // as it is unnecessary to explicitly retain any state about the
@@ -650,18 +713,12 @@ module vert_ucode_quicksort (
       sort_momento_in      = sort__en & (~sort__wen);
 
       //
-      stack__cmd_vld       = decode_adv & (ucode.is_push | ucode.is_pop);
-      stack__cmd_push      = ucode.is_push;
-      stack__cmd_push_dat  = rf__rdata [0];
-      stack__cmd_clr       = '0;
-
-      //
-      sort_bank_en         = decode_adv & ucode.is_emit;
+      sort_bank_en         = da_adv & da_ucode.is_emit;
       sort_bank            = bank_state_r [sort_bank_idx_r];
       sort_bank.status     = BANK_SORTED;
       sort_bank.error      = '0;
 
-    end // block: datapath_PROC
+    end
   
   // ------------------------------------------------------------------------ //
   //
@@ -861,41 +918,57 @@ module vert_ucode_quicksort (
   //
   always_ff @(posedge clk)
     if (rst)
-      decode_ld_stall_r <= 'b0;
+      da_ld_stall_r <= 'b0;
     else
-      decode_ld_stall_r <= decode_ld_stall_w;
+      da_ld_stall_r <= da_ld_stall_w;
   
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
     if (rst)
-      {flag_z_r, flag_n_r, flag_c_r} <= 'b0;
-    else if (flag_en)
-      {flag_z_r, flag_n_r, flag_c_r} <= {flag_z_w, flag_n_w, flag_c_w};
+      {ar_flag_z_r, ar_flag_n_r, ar_flag_c_r} <= 'b0;
+    else if (ar_flag_en)
+      {ar_flag_z_r, ar_flag_n_r, ar_flag_c_r} <=
+          {ar_flag_z_w, ar_flag_n_w, ar_flag_c_w};
   
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
     if (rst)
-      rf__wen_r  = '0;
+      da_rf__wen_r <= '0;
     else
-      rf__wen_r <= rf__wen_w;
+      da_rf__wen_r <= da_rf__wen_w;
   
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
-    if (rf__wen_w) begin
-      rf__wa_r    <= rf__wa_w;
-      rf__wdata_r <= rf__wdata_w;
+    if (da_rf__wen_w) begin
+      da_rf__wa_r    <= da_rf__wa_w;
+      da_rf__wdata_r <= da_rf__wdata_w;
     end
   
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
     if (rst)
-      pc_r <= SYM_RESET;
+      fa_pc_r <= SYM_RESET;
+    else if (fa_pc_en)
+      fa_pc_r <= fa_pc_w;
+
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      da_valid_r <= 'b0;
     else
-      pc_r <= pc_w;
+      da_valid_r <= da_valid_w;
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (da_en)
+      da_inst_r <= da_inst_w;
+
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
@@ -953,30 +1026,6 @@ module vert_ucode_quicksort (
   //
   always_ff @(posedge clk)
     if (rst)
-      pc_r <= SYM_RESET;
-    else if (pc_en)
-      pc_r <= pc_w;
-  
-  // ------------------------------------------------------------------------ //
-  //
-  always_ff @(posedge clk)
-    if (rst)
-      decode_vld_r <= '0;
-    else
-      decode_vld_r <= decode_vld_w;
-  
-  // ------------------------------------------------------------------------ //
-  //
-  always_ff @(posedge clk)
-    if (rst)
-      inst_r <= '0;
-    else if (inst_en)
-      inst_r <= inst_w;
-  
-  // ------------------------------------------------------------------------ //
-  //
-  always_ff @(posedge clk)
-    if (rst)
       dequeue_bank_idx_r <= '0;
     else if (dequeue_bank_idx_en)
       dequeue_bank_idx_r <= dequeue_bank_idx_w;
@@ -1023,7 +1072,7 @@ module vert_ucode_quicksort (
     //
     , .a                 (adder__a           )
     , .b                 (adder__b           )
-    , .cout              (adder__cin         )
+    , .cin               (adder__cin         )
   );
   
   // ------------------------------------------------------------------------ //
@@ -1033,13 +1082,13 @@ module vert_ucode_quicksort (
       .clk               (clk                )
     , .rst               (rst                )
     //
-    , .ra                (rf__ra             )
-    , .ren               (rf__ren            )
-    , .rdata             (rf__rdata          )
+    , .ra                (da_rf__ra          )
+    , .ren               (da_rf__ren         )
+    , .rdata             (da_rf__rdata       )
     //
-    , .wa                (rf__wa_r           )
-    , .wen               (rf__wen_r          )
-    , .wdata             (rf__wdata_r        )
+    , .wa                (da_rf__wa_r        )
+    , .wen               (da_rf__wen_r       )
+    , .wdata             (da_rf__wdata_r     )
   );
 
   // ------------------------------------------------------------------------ //
