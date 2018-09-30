@@ -392,7 +392,7 @@ module vert_ucode_quicksort (
   //   SUBI 0111_1rrr_Wsss_1iii
   //
   //   CALL 1100_0XXX_AAAA_AAAA
-  //    RET 1100_1XXX_AAAA_AAAA
+  //    RET 1100_1XXX_XXXX_XXXX
   //
   //   WAIT 1111_0XXX_XXXX_XXXX
   //   EMIT 1111_1XXX_XXXX_XXXX
@@ -594,7 +594,7 @@ module vert_ucode_quicksort (
 
       da_valid_w  = fa_pass & (~da_stall);
       da_adv      = da_valid_r & (~da_stall);
-      da_en       = fa_pass & (~da_stall);
+      da_en       = (~da_stall);
 
       //
       da_rf__ra        = {da_ucode.src1, da_ucode.src0};
@@ -615,13 +615,13 @@ module vert_ucode_quicksort (
     begin : exe_PROC
       
       //
-      da_src0          = da_src0_is_wrbk ? da_rf__wdata_r : da_rf__rdata [0];
-
-      //
-      da_src1          = da_src1_is_wrbk ? da_rf__wdata_r : da_rf__rdata [1];
+      da_src0   = da_src0_is_wrbk ? da_rf__wdata_r : da_rf__rdata [0];
+      da_src1   = da_src1_is_wrbk ? da_rf__wdata_r : da_rf__rdata [1];
       
       //
-      adder__a         = da_src0 & {W{~da_ucode.src0_is_zero}};
+      adder__a  = da_src0 & {W{~da_ucode.src0_is_zero}};
+
+      //
       casez ({da_ucode.has_special, da_ucode.has_imm})
         // Presently, only the CONTEXT.N special register has been
         // implemented.
@@ -629,8 +629,10 @@ module vert_ucode_quicksort (
         2'b01:   adder__b_pre  = w_t'(da_ucode.imm);
         default: adder__b_pre  = da_src1;
       endcase // casez ({ucode.has_special, ucode.has_imm})
-      adder__b      = adder__b_pre ^ {W{da_ucode.inv_src1}};
-      adder__cin    = da_ucode.cin;
+
+      //
+      adder__b    = adder__b_pre ^ {W{da_ucode.inv_src1}};
+      adder__cin  = da_ucode.cin;
 
     end // block: exe_PROC
   
@@ -644,10 +646,10 @@ module vert_ucode_quicksort (
 
       //
       case (1'b1)
-        da_ucode.is_ret:  fa_pc_w  = pc_t'(da_rf__rdata [0]);
+        da_ucode.is_ret:  fa_pc_w  = pc_t'(da_rf__rdata [1]);
         
         da_ucode.is_call,
-          da_taken_branch:  fa_pc_w  = da_ucode.target;
+        da_taken_branch:  fa_pc_w  = da_ucode.target;
         default:          fa_pc_w  = fa_pc_r + 'b1;
       endcase // case (1'b1)
 

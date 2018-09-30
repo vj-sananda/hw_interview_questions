@@ -118,36 +118,44 @@ package vert_ucode_quicksort_pkg;
       } jcc;
       struct  packed {
         logic is_pop;
+        union packed {
+          struct packed {
+            reg_t dst;
+            logic [7:0] padding0;
+          } pop;
+          struct packed {
+            logic [6:0] padding0;
+            reg_t src1;
+          } push;
+        } u;
         reg_t dst; // TODO: rename
         logic [7:0] padding;
       } pp;
       struct  packed {
         logic is_st;
         reg_t dst;
-        logic padding0;
-        reg_t src;
-        logic [3:0] padding1;
-      } mem;
-      struct  packed {
-        logic is_imm_or_special;
-        reg_t dst;
         union packed {
           struct packed {
-            logic padding0;
-            reg_t src;
-            logic [3:0] padding1;
-          } simple;
+            logic [3:0] padding0;
+            reg_t src1;
+          } ld;
           struct packed {
-            logic is_special;
-            struct packed {
-              reg_special_t special;
-              logic [3:0] padding;
-            } special;
-            struct packed {
-              logic [3:0] padding;
-              imm_t imm;
-            } immediate;
-          } imm_or_special;
+            logic padding0;
+            reg_t src0;
+            logic padding1;
+            reg_t src1;
+          } st;
+        } u;
+      } mem;
+      struct  packed {
+        logic is_special;
+        reg_t dst;
+        logic [3:0] padding0;
+        logic is_imm;
+        union packed {
+          reg_t src;
+          reg_special_t special;
+          imm_t imm;
         } u;
       } mov;
       struct  packed {
@@ -162,12 +170,12 @@ package vert_ucode_quicksort_pkg;
         } u;
       } arith;
       struct  packed {
-        logic is_call;
+        logic is_ret;
         logic [2:0] padding;
         field_A_t a;
       } cret;
       struct  packed {
-        logic is_wait;
+        logic is_emit;
         logic [10:0] padding;
       } cntrl;
     } u;
