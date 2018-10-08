@@ -100,8 +100,16 @@ struct Tracer : sc_core::sc_module {
       const uint32_t addr = qs_->da_pc_r;
       ss << "0x" << std::hex << addr << ": ";
       disassemble(ss, (qs_->da_inst_r & 0xFFFF));
-      
+      writeback(ss);
       std::cout << ss.str() << "\n";
+    }
+  }
+  void writeback(std::ostream & os) {
+    if (qs_->da_rf___05Fwen_w) {
+      const uint32_t waddr = qs_->da_rf___05Fwa_w;
+      const uint32_t wdata = qs_->da_rf___05Fwdata_w;
+
+      os << "\t(R" << waddr << " <= " << std::hex << wdata << ")";
     }
   }
   void disassemble(std::ostream & os, const uint32_t inst) {

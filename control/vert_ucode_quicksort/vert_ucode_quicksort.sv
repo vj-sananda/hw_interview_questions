@@ -191,9 +191,9 @@ module vert_ucode_quicksort (
   logic [1:0]                           da_rf__ren;
   w_t   [1:0]                           da_rf__rdata;
   //
-  reg_t                                 da_rf__wa_w;
-  logic                                 da_rf__wen_w;
-  w_t                                   da_rf__wdata_w;
+  reg_t                                 da_rf__wa_w /* verilator public */;
+  logic                                 da_rf__wen_w /* verilator public */;
+  w_t                                   da_rf__wdata_w /* verilator public */;
   //
   reg_t                                 da_rf__wa_r;
   logic                                 da_rf__wen_r;
