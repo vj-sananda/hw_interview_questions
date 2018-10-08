@@ -30,8 +30,10 @@
 #include <deque>
 #include <algorithm>
 #include <sstream>
+#include <iostream>
 
 #include "vobj/Vvert_ucode_quicksort.h"
+#include "vobj/Vvert_ucode_quicksort_vert_ucode_quicksort.h"
 
 typedef Vvert_ucode_quicksort uut_t;
 typedef uint32_t dat_t;
@@ -68,6 +70,108 @@ std::string vector_to_string(FwdIt begin, FwdIt end) {
 #define PORTS_MISC(__func)                      \
   __func(busy_r, bool)
 
+
+namespace detail {
+
+uint32_t range(uint32_t word, uint32_t hi, uint32_t lo = 0) {
+  return (word >> lo) & ((1 << (hi - lo)) - 1);
+}
+bool bit (uint32_t word, uint32_t b) {
+  return (word >> b) & 0x1;
+}
+
+} // namespace detail
+
+struct Tracer : sc_core::sc_module {
+  SC_HAS_PROCESS(Tracer);
+  sc_core::sc_in<bool> clk;
+  Tracer (Vvert_ucode_quicksort_vert_ucode_quicksort* qs,
+          sc_core::sc_module_name mn = "tracer")
+      : qs_(qs), sc_module(mn), clk("clk") {
+    SC_METHOD(t_trace);
+    sensitive << clk.neg();
+    dont_initialize();
+  }
+ private:
+  void t_trace() {
+    if (qs_->da_adv) {
+      ss.clear();
+
+      ss << "[" << sc_core::sc_time_stamp() << "] ";
+      disassemble(ss, qs_->da_inst_r);
+      std::cout << ss.str() << "\n";
+    }
+  }
+  void disassemble(std::ostream & os, const uint32_t inst) {
+    const bool sel0 = detail::bit(inst, 11);
+    const bool sel1 = detail::bit(inst, 3);
+    const bool sel2 = detail::bit(inst, 7);
+    const uint8_t r = detail::range(inst, 10, 8);
+    const uint8_t s = detail::range(inst, 6, 4);
+    const uint8_t u = detail::range(inst, 2, 0);
+    const uint8_t a = detail::range(inst, 7, 0);
+    switch (detail::range(inst, 15, 12)) {
+      case 2: {
+        if (sel0) {
+          os << "POP R" << r;
+        } else {
+          os << "PUSH R" << u;
+        }
+      } break;
+      case 4: {
+        if (sel0) {
+          // ST
+          os << "ST R" << s << ", [R" << u << "]";
+        } else {
+          // LD
+          os << "LD R" << r << ", [R" << u << "]";
+        }
+        os << (sel0 ? "ST" : "LD");
+      } break;
+      case 6: {
+        const bool is_imm = (!sel0) && sel1;
+        const bool is_spe = ( sel0);
+
+        os << "MOV";
+        if (is_imm) {
+          os << "I";
+        } else if (is_spe) {
+          os << "S";
+        }
+        os << " R" << r << ", ";
+        if (is_imm) {
+          os << "u";
+        } else if (is_spe) {
+          os << "S" << u;
+        } else {
+          os << "R" << u;
+        }
+      } break;
+      case 7: {
+        os << (sel0 ? "SUB" : "ADD");
+        if (sel1)
+          os << "I";
+
+        if (sel2)
+          os << " R" << r << ", R" << s;
+        else
+          os << " 0";
+
+        os << ", " << (sel1 ? "R" : "") << u;
+      } break;
+      case 12: {
+        os << (sel0 ? "RET" : "CALL");
+        if (!sel0)
+          os << " " << a;
+      } break;
+      case 15: {
+        os << (sel0 ? "EMIT" : "WAIT");
+      } break;
+    }
+  };
+  Vvert_ucode_quicksort_vert_ucode_quicksort* qs_;
+  std::stringstream ss;
+};
 
 struct UnsortedIntf : sc_core::sc_interface {
   virtual void t_idle () = 0;
@@ -196,6 +300,7 @@ struct VertUcodeQuicksortTb : libtb2::Top<uut_t> {
   SC_HAS_PROCESS(VertUcodeQuicksortTb);
   VertUcodeQuicksortTb(sc_core::sc_module_name mn = "t")
     : uut_("uut")
+    , tracer_(uut_.vert_ucode_quicksort)
 #define __construct_ports(__name, __type)       \
       , __name ## _(#__name)
     PORTS_UNSORTED_OUT(__construct_ports)
@@ -233,6 +338,8 @@ struct VertUcodeQuicksortTb : libtb2::Top<uut_t> {
     PORTS_SORTED(__bind)
 #undef __bind
 
+    tracer_.clk(clk_);
+    
     SC_THREAD(t_stimulus);
     register_uut(uut_);
     vcd_on();
@@ -294,6 +401,7 @@ private:
   UnsortedXactor unsortedxactor_;
   SortedMonitor monitor_;
   uut_t uut_;
+  Tracer tracer_;
 };
 SC_MODULE_EXPORT(VertUcodeQuicksortTb);
 

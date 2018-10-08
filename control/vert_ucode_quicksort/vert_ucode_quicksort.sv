@@ -209,7 +209,7 @@ module vert_ucode_quicksort (
   //
   logic                                 da_en;
   logic                                 da_stall;
-  logic                                 da_adv;
+  logic                                 da_adv /* verilator public */;
   logic                                 da_valid_w;
   logic                                 da_valid_r;
   logic                                 da_cc_hit;
@@ -224,7 +224,7 @@ module vert_ucode_quicksort (
   //
   ucode_t                               da_ucode;
   //
-  inst_t                                da_inst_r;
+  inst_t                                da_inst_r /* verilator public */;
   inst_t                                da_inst_w;
   
   // ======================================================================== //
