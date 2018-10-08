@@ -74,7 +74,7 @@ std::string vector_to_string(FwdIt begin, FwdIt end) {
 namespace detail {
 
 uint32_t range(uint32_t word, uint32_t hi, uint32_t lo = 0) {
-  return (word >> lo) & ((1 << (hi - lo)) - 1);
+  return (word >> lo) & ((1 << (hi - lo + 1)) - 1);
 }
 bool bit (uint32_t word, uint32_t b) {
   return (word >> b) & 0x1;
@@ -95,10 +95,12 @@ struct Tracer : sc_core::sc_module {
  private:
   void t_trace() {
     if (qs_->da_adv) {
-      ss.clear();
-
+      std::stringstream ss;
       ss << "[" << sc_core::sc_time_stamp() << "] ";
-      disassemble(ss, qs_->da_inst_r);
+      const uint32_t addr = qs_->da_pc_r;
+      ss << "0x" << std::hex << addr << ": ";
+      disassemble(ss, (qs_->da_inst_r & 0xFFFF));
+      
       std::cout << ss.str() << "\n";
     }
   }
@@ -106,11 +108,23 @@ struct Tracer : sc_core::sc_module {
     const bool sel0 = detail::bit(inst, 11);
     const bool sel1 = detail::bit(inst, 3);
     const bool sel2 = detail::bit(inst, 7);
-    const uint8_t r = detail::range(inst, 10, 8);
-    const uint8_t s = detail::range(inst, 6, 4);
-    const uint8_t u = detail::range(inst, 2, 0);
-    const uint8_t a = detail::range(inst, 7, 0);
-    switch (detail::range(inst, 15, 12)) {
+    const uint32_t r = detail::range(inst, 10, 8);
+    const uint32_t s = detail::range(inst, 6, 4);
+    const uint32_t u = detail::range(inst, 2, 0);
+    const uint32_t a = detail::range(inst, 7, 0);
+    const uint32_t opcode = detail::range(inst, 15, 12);
+
+    switch (opcode) {
+      case 1: {
+        const uint32_t cc = detail::range(inst, 9, 8);
+        os << "J";
+        switch (cc) {
+        case 1: os << "EQ"; break;
+        case 2: os << "GT"; break;
+        case 3: os << "LE"; break;
+        }
+        os << " " << a;
+      } break;
       case 2: {
         if (sel0) {
           os << "POP R" << r;
@@ -126,7 +140,6 @@ struct Tracer : sc_core::sc_module {
           // LD
           os << "LD R" << r << ", [R" << u << "]";
         }
-        os << (sel0 ? "ST" : "LD");
       } break;
       case 6: {
         const bool is_imm = (!sel0) && sel1;
@@ -140,7 +153,7 @@ struct Tracer : sc_core::sc_module {
         }
         os << " R" << r << ", ";
         if (is_imm) {
-          os << "u";
+          os << u;
         } else if (is_spe) {
           os << "S" << u;
         } else {
@@ -153,11 +166,12 @@ struct Tracer : sc_core::sc_module {
           os << "I";
 
         if (sel2)
-          os << " R" << r << ", R" << s;
+          os << " R" << r;
         else
-          os << " 0";
+          os << ".f 0";
 
-        os << ", " << (sel1 ? "R" : "") << u;
+        os << ", R" << s;
+        os << ", " << (sel1 ? "" : "R") << u;
       } break;
       case 12: {
         os << (sel0 ? "RET" : "CALL");
@@ -167,10 +181,12 @@ struct Tracer : sc_core::sc_module {
       case 15: {
         os << (sel0 ? "EMIT" : "WAIT");
       } break;
+      default: {
+        os << "INVALID OPCODE:" << (int)opcode;
+      }
     }
   };
   Vvert_ucode_quicksort_vert_ucode_quicksort* qs_;
-  std::stringstream ss;
 };
 
 struct UnsortedIntf : sc_core::sc_interface {

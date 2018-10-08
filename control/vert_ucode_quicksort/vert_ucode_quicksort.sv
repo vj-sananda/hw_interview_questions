@@ -210,12 +210,15 @@ module vert_ucode_quicksort (
   logic                                 da_en;
   logic                                 da_stall;
   logic                                 da_adv /* verilator public */;
+  logic                                 da_mem_op_issue;
   logic                                 da_valid_w;
   logic                                 da_valid_r;
   logic                                 da_cc_hit;
   logic                                 da_taken_branch;
   logic                                 da_ld_stall_r;
   logic                                 da_ld_stall_w;
+  pc_t                                  da_pc_w;
+  pc_t                                  da_pc_r /* verilator public */;
   //
   logic                                 da_src0_is_wrbk;
   w_t                                   da_src0;
@@ -474,7 +477,9 @@ module vert_ucode_quicksort (
   always_comb
     begin : quicksort_prog_PROC
 
+      //
       da_inst_w  = '0;
+      da_pc_w    = fa_pc_r;
 
       // Control Store
       //
@@ -571,14 +576,6 @@ module vert_ucode_quicksort (
         LE:      da_cc_hit  = ar_flag_z_r | ar_flag_n_r;
         default: da_cc_hit  = 1'b1;
       endcase // unique case (da_ucode.cc)
-      
-      //
-      da_taken_branch  = da_valid_r & da_ucode.is_jump && da_cc_hit;
-
-      //
-      fa_kill          = da_taken_branch;
-      fa_valid         = (~fa_kill);
-      fa_pass          = fa_valid & (~fa_kill);
 
       //
       case (da_ld_stall_r)
@@ -589,16 +586,33 @@ module vert_ucode_quicksort (
       //
       priority case (1'b1)
         da_ucode.is_wait: da_stall  = (~queue_ready [sort_bank_idx_r]);
-        default:          da_stall  = (~da_ld_stall_w);
+        default:          da_stall  = da_ld_stall_w;
       endcase // priority case (1'b1)
+      
+      //
+      da_taken_branch  = da_valid_r & da_ucode.is_jump && da_cc_hit;
 
-      da_valid_w  = fa_pass & (~da_stall);
-      da_adv      = da_valid_r & (~da_stall);
-      da_en       = (~da_stall);
+      //
+      fa_kill          = da_taken_branch;
+      fa_valid         = (~fa_kill);
+      fa_pass          = fa_valid & (~fa_kill);
+      fa_adv           = fa_pass & (~da_valid_r | ~da_stall);
+
+      //
+      da_valid_w       = fa_pass & (~da_stall) | (da_valid_r & da_stall);
+      da_adv           = da_valid_r & (~da_stall);
+      da_en            = (~da_stall);
 
       //
       da_rf__ra        = {da_ucode.src1, da_ucode.src0};
 
+      //
+      case (1'b1)
+        da_ucode.is_store: da_mem_op_issue  = da_valid_r;
+        da_ucode.is_load:  da_mem_op_issue  = da_valid_r & (~da_ld_stall_r);
+        default:           da_mem_op_issue  = '0;
+      endcase // case (1'b1)
+      
       //
       da_src0_is_wrbk  = da_rf__wen_r & (da_rf__ra [0] == da_rf__wa_r);
       da_src1_is_wrbk  = da_rf__wen_r & (da_rf__ra [1] == da_rf__wa_r);
@@ -613,7 +627,7 @@ module vert_ucode_quicksort (
   //
   always_comb
     begin : exe_PROC
-      
+
       //
       da_src0   = da_src0_is_wrbk ? da_rf__wdata_r : da_rf__rdata [0];
       da_src1   = da_src1_is_wrbk ? da_rf__wdata_r : da_rf__rdata [1];
@@ -703,24 +717,28 @@ module vert_ucode_quicksort (
     begin : sort_PROC
       
       //
-      sort__en             = da_adv & (da_ucode.is_store | da_ucode.is_load);
-      sort__wen            = da_ucode.is_store;
-      sort__addr           = addr_t'(da_rf__rdata [0]);
-      sort__din            = da_rf__rdata [1];
+      sort__en          = da_mem_op_issue;
+      sort__wen         = da_ucode.is_store;
+      sort__addr        = addr_t'(da_rf__rdata [0]);
+      sort__din         = da_rf__rdata [1];
 
       // The 'momento' in this version is essentially just the rdata valid
       // as it is unnecessary to explicitly retain any state about the
       // operation.
       //
-      sort_momento_in      = sort__en & (~sort__wen);
+      sort_momento_in   = sort__en & (~sort__wen);
 
       //
-      sort_bank_en         = da_adv & da_ucode.is_emit;
-      sort_bank            = bank_state_r [sort_bank_idx_r];
-      sort_bank.status     = BANK_SORTED;
-      sort_bank.error      = '0;
+      sort_bank_en      = da_adv & da_ucode.is_emit;
+      sort_bank         = bank_state_r [sort_bank_idx_r];
+      sort_bank.status  = BANK_SORTED;
+      sort_bank.error   = '0;
 
-    end
+      //
+      sort_bank_idx_en  = sort_bank_en;
+      sort_bank_idx_w   = sort_bank_idx_r + 'b1;
+
+    end // block: sort_PROC
   
   // ------------------------------------------------------------------------ //
   //
@@ -846,15 +864,15 @@ module vert_ucode_quicksort (
 
         if (bank_n_t'(i)   == enqueue_bank_idx_r) begin
           bank_state_en [i]  |= enqueue_bank_en;
-          bank_state_w [i]   |= enqueue_bank;
+          bank_state_w [i]   |= (enqueue_bank_en ? enqueue_bank : '0);
         end
         if (bank_n_t'(i)   == sort_bank_idx_r) begin
           bank_state_en [i]  |= sort_bank_en;
-          bank_state_w [i]   |= sort_bank;
+          bank_state_w [i]   |= (sort_bank_en ? sort_bank : '0);
         end
         if (bank_n_t'(i)   == dequeue_bank_idx_r) begin
           bank_state_en [i]  |= dequeue_bank_en;
-          bank_state_w [i]   |= dequeue_bank;
+          bank_state_w [i]   |= (dequeue_bank_en ? dequeue_bank : '0);
         end
 
       end
@@ -968,8 +986,10 @@ module vert_ucode_quicksort (
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
-    if (da_en)
+    if (da_en) begin
       da_inst_r <= da_inst_w;
+      da_pc_r   <= da_pc_w;
+    end
 
   // ------------------------------------------------------------------------ //
   //

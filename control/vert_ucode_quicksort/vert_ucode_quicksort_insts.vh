@@ -106,7 +106,7 @@ task inst_movs(reg_t dst, reg_special_t src1); begin
   da_inst_w.u.mov.u.special   = src1;
 end endtask
 
-task inst_addi(reg_t dst, reg_t src0, imm_t imm); begin
+task inst_addi(reg_t dst, reg_t src0, imm_t imm, bit dst_en = 'b1); begin
   inst_default();
   //
   da_inst_w.opcode          = ARITH;
@@ -114,9 +114,10 @@ task inst_addi(reg_t dst, reg_t src0, imm_t imm); begin
   da_inst_w.u.arith.src0    = src0;
   da_inst_w.u.arith.is_imm  = 'b1;
   da_inst_w.u.arith.u.imm   = imm;
+  da_inst_w.u.arith.wren    = dst_en;
 end endtask
 
-task inst_subi(reg_t dst, reg_t src0, imm_t imm); begin
+task inst_subi(reg_t dst, reg_t src0, imm_t imm, bit dst_en = 'b1); begin
   inst_default();
   //
   da_inst_w.opcode          = ARITH;
@@ -125,6 +126,7 @@ task inst_subi(reg_t dst, reg_t src0, imm_t imm); begin
   da_inst_w.u.arith.src0    = src0;
   da_inst_w.u.arith.is_imm  = 'b1;
   da_inst_w.u.arith.u.imm   = imm;
+  da_inst_w.u.arith.wren    = dst_en;
 end endtask
 
 task inst_sub(reg_t dst, reg_t src0, reg_t src1, bit dst_en = 'b1); begin

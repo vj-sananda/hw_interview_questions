@@ -108,10 +108,11 @@ package vert_ucode_quicksort_pkg;
   typedef struct packed {
     opcode_t opcode;
     union packed {
+      logic [11:0] raw;
       struct packed {
         logic [11:0] padding;
       } nop;
-      struct  packed {
+      struct packed {
         logic [1:0] padding;
         cc_t cc;
         field_A_t A;
@@ -124,12 +125,10 @@ package vert_ucode_quicksort_pkg;
             logic [7:0] padding0;
           } pop;
           struct packed {
-            logic [6:0] padding0;
+            logic [7:0] padding0;
             reg_t src1;
           } push;
         } u;
-        reg_t dst; // TODO: rename
-        logic [7:0] padding;
       } pp;
       struct  packed {
         logic is_st;
@@ -137,6 +136,7 @@ package vert_ucode_quicksort_pkg;
         union packed {
           struct packed {
             logic [3:0] padding0;
+            logic       padding1;
             reg_t src1;
           } ld;
           struct packed {
@@ -369,9 +369,9 @@ package vert_ucode_quicksort_pkg;
       end
       CNTRL: begin
         if (sel)
-          ucode.is_wait  = 'b1;
-        else
           ucode.is_emit  = 'b1;
+        else
+          ucode.is_wait  = 'b1;
       end
       default: begin
         ucode.invalid_inst  = 'b1;
