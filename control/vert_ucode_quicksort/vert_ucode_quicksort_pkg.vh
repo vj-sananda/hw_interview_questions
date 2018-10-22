@@ -335,8 +335,9 @@ package vert_ucode_quicksort_pkg;
         endcase // unique0 casez ({inst[11],inst[3]})
       end
       ARITH: begin
-        ucode.dst_en    = W_field(inst);
-        ucode.src0_en   = 'b1;
+        ucode.dst_en   = W_field(inst);
+        ucode.flag_en  = 'b1;
+        ucode.src0_en  = 'b1;
         if (IMM_field(inst))
           // {ADD,SUB}I
           ucode.has_imm  = 'b1;

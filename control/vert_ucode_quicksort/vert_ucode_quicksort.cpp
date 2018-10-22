@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <sstream>
 #include <iostream>
+#include <map>
 
 #include "vobj/Vvert_ucode_quicksort.h"
 #include "vobj/Vvert_ucode_quicksort_vert_ucode_quicksort.h"
@@ -38,6 +39,13 @@
 typedef Vvert_ucode_quicksort uut_t;
 typedef uint32_t dat_t;
 typedef std::vector<dat_t> queue_t;
+
+#define ASSERT(__cond) do {                     \
+  if (!(__cond)) {                              \
+    sc_core::sc_stop();                         \
+  }                                             \
+  } while (false)
+  
 
 template<typename FwdIt>
 std::string vector_to_string(FwdIt begin, FwdIt end) {
@@ -83,34 +91,84 @@ bool bit (uint32_t word, uint32_t b) {
 } // namespace detail
 
 struct Tracer : sc_core::sc_module {
+  enum {
+    BLINK = 7
+  };
+  
   SC_HAS_PROCESS(Tracer);
   sc_core::sc_in<bool> clk;
+  sc_core::sc_in<bool> rst;
   Tracer (Vvert_ucode_quicksort_vert_ucode_quicksort* qs,
           sc_core::sc_module_name mn = "tracer")
       : qs_(qs), sc_module(mn), clk("clk") {
     SC_METHOD(t_trace);
     sensitive << clk.neg();
     dont_initialize();
+
+    m_.reset();
   }
  private:
   void t_trace() {
+    if (rst)
+      return;
+    
     if (qs_->da_adv) {
       std::stringstream ss;
       ss << "[" << sc_core::sc_time_stamp() << "] ";
       const uint32_t addr = qs_->da_pc_r;
       ss << "0x" << std::hex << addr << ": ";
       disassemble(ss, (qs_->da_inst_r & 0xFFFF));
-      writeback(ss);
+      ASSERT(check_writeback(ss));
       std::cout << ss.str() << "\n";
     }
   }
-  void writeback(std::ostream & os) {
+  bool check_writeback(std::ostream & os) {
+    bool ret = true;
+
     if (qs_->da_rf___05Fwen_w) {
       const uint32_t waddr = qs_->da_rf___05Fwa_w;
       const uint32_t wdata = qs_->da_rf___05Fwdata_w;
 
       os << "\t(R" << waddr << " <= " << std::hex << wdata << ")";
+
+      if (expected_.check_en) {
+
+        if (expected_.wr_addr != waddr) {
+          os << "  **** expected wr_addr = " << expected_.wr_addr << " != "
+             << "actual wr_addr = " << waddr;
+          ret = false;
+        }
+
+        if (expected_.wr_data != wdata) {
+          os << "  **** expected wr_data = " << expected_.wr_data << " != "
+             << "actual wr_data = " << wdata;
+          ret = false;
+        }
+      }
+
+      // Apply model update
+      m_.regs[waddr] = wdata;
     }
+
+    if (expected_.sets_flags) {
+      os << " (ZNC <= "
+         << (qs_->ar_flag_z_r == 0 ? '0' : '1')
+         << (qs_->ar_flag_n_r == 0 ? '0' : '1')
+         << (qs_->ar_flag_c_r == 0 ? '0' : '1')
+         << ")"
+        ;
+    }
+
+    const uint32_t actual_pc = qs_->da_pc_r;
+    if (actual_pc != m_.pc) {
+      os << "  **** expected pc = " << m_.pc << " != "
+         << "actual pc = " << actual_pc;
+      ret = false;
+    }
+    // Apply model update
+    m_.pc = expected_.next_pc;
+    
+    return ret;
   }
   void disassemble(std::ostream & os, const uint32_t inst) {
     const bool sel0 = detail::bit(inst, 11);
@@ -122,23 +180,58 @@ struct Tracer : sc_core::sc_module {
     const uint32_t a = detail::range(inst, 7, 0);
     const uint32_t opcode = detail::range(inst, 15, 12);
 
+    expected_.reset();
     switch (opcode) {
       case 1: {
         const uint32_t cc = detail::range(inst, 9, 8);
         os << "J";
+
+        const bool z = (qs_->ar_flag_z_r != 0);
+        const bool n = (qs_->ar_flag_n_r != 0);
+        const bool c = (qs_->ar_flag_c_r != 0);
+        
+        bool taken = true;
         switch (cc) {
-        case 1: os << "EQ"; break;
-        case 2: os << "GT"; break;
-        case 3: os << "LE"; break;
+        case 1: {
+          os << "EQ";
+          
+          taken = z;
+        } break;
+        case 2: {
+          os << "GT";
+
+          taken = !z && !n;
+        } break;
+        case 3: {
+          os << "LE";
+
+          taken = z || n;
+        } break;
         }
         os << " " << a;
+
+        if (taken)
+          expected_.next_pc = a;
+        else
+          expected_.next_pc++;
       } break;
       case 2: {
         if (sel0) {
+          ASSERT(m_.stack.size() != 0);
+
           os << "POP R" << r;
+
+          expected_.check_en = true;
+          expected_.wr_en = true;
+          expected_.wr_addr = r;
+          expected_.wr_data = m_.stack.back();
+          m_.stack.pop_back();
         } else {
           os << "PUSH R" << u;
+
+          m_.stack.push_back(m_.regs[u]);
         }
+        expected_.next_pc++;
       } break;
       case 4: {
         if (sel0) {
@@ -148,6 +241,8 @@ struct Tracer : sc_core::sc_module {
           // LD
           os << "LD R" << r << ", [R" << u << "]";
         }
+        expected_.check_en = false;
+        expected_.next_pc++;
       } break;
       case 6: {
         const bool is_imm = (!sel0) && sel1;
@@ -167,6 +262,13 @@ struct Tracer : sc_core::sc_module {
         } else {
           os << "R" << u;
         }
+
+        expected_.check_en = !is_spe;
+        expected_.next_pc++;
+        expected_.wr_en = true;
+        expected_.wr_addr = r;
+        expected_.wr_data = is_imm ? u : m_.regs[u];
+        expected_.is_special = is_spe;
       } break;
       case 7: {
         os << (sel0 ? "SUB" : "ADD");
@@ -180,20 +282,76 @@ struct Tracer : sc_core::sc_module {
 
         os << ", R" << s;
         os << ", " << (sel1 ? "" : "R") << u;
+
+        const uint32_t a = m_.regs[r];
+        const uint32_t b = sel1 ? u : m_.regs[u];
+        
+        expected_.check_en = true;
+        expected_.next_pc++;
+        expected_.wr_en = sel2;
+        expected_.wr_addr = r;
+        expected_.wr_data = sel0 ? (a - b) : (a + b);
+        expected_.sets_flags = !sel2;
       } break;
       case 12: {
         os << (sel0 ? "RET" : "CALL");
         if (!sel0)
           os << " " << a;
+
+        expected_.check_en = true;
+        expected_.next_pc = sel0 ? m_.regs[BLINK] : a;
+        if (!sel0) {
+          expected_.wr_en = true;
+          expected_.wr_addr = BLINK;
+          expected_.wr_data = m_.pc + 1;
+        }
       } break;
       case 15: {
         os << (sel0 ? "EMIT" : "WAIT");
+
+        expected_.check_en = true;
+        expected_.next_pc++;
       } break;
       default: {
         os << "INVALID OPCODE:" << (int)opcode;
       }
     }
   };
+  struct {
+    bool check_en;
+    uint32_t next_pc;
+    bool wr_en;
+    uint32_t wr_addr;
+    uint32_t wr_data;
+    bool is_special;
+    bool sets_flags;
+    bool z,n,c;
+    void init() {
+      check_en = false;
+      next_pc = 0;
+      wr_en = false;
+      is_special = false;
+    }
+    void reset() {
+      check_en = true;
+      wr_en = false;
+      is_special = false;
+      sets_flags = false;
+    }
+  } expected_;
+
+  struct {
+    void reset() {
+      regs.clear();
+      stack.clear();
+      mem.clear();
+      pc = 0;
+    }
+    std::map<uint32_t, uint32_t> regs;
+    std::vector<uint32_t> stack;
+    std::map<uint32_t, uint32_t> mem;
+    uint32_t pc;
+  } m_;
   Vvert_ucode_quicksort_vert_ucode_quicksort* qs_;
 };
 
@@ -363,6 +521,7 @@ struct VertUcodeQuicksortTb : libtb2::Top<uut_t> {
 #undef __bind
 
     tracer_.clk(clk_);
+    tracer_.rst(rst_);
     
     SC_THREAD(t_stimulus);
     register_uut(uut_);

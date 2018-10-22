@@ -183,9 +183,9 @@ module vert_ucode_quicksort (
   logic                                 ar_flag_n_w;
   logic                                 ar_flag_c_w;
   //
-  logic                                 ar_flag_z_r;
-  logic                                 ar_flag_n_r;
-  logic                                 ar_flag_c_r;
+  logic                                 ar_flag_z_r /* verilator public */;
+  logic                                 ar_flag_n_r /* verilator public */;
+  logic                                 ar_flag_c_r /* verilator public */;
   //
   reg_t [1:0]                           da_rf__ra;
   logic [1:0]                           da_rf__ren;
@@ -215,6 +215,8 @@ module vert_ucode_quicksort (
   logic                                 da_valid_r;
   logic                                 da_cc_hit;
   logic                                 da_taken_branch;
+  logic                                 da_taken_ret;
+  logic                                 da_taken_call;
   logic                                 da_ld_stall_r;
   logic                                 da_ld_stall_w;
   pc_t                                  da_pc_w;
@@ -591,6 +593,8 @@ module vert_ucode_quicksort (
       
       //
       da_taken_branch  = da_valid_r & da_ucode.is_jump && da_cc_hit;
+      da_taken_ret     = da_valid_r & da_ucode.is_ret;
+      da_taken_call    = da_valid_r & da_ucode.is_call;
 
       //
       fa_kill          = da_taken_branch;
@@ -660,9 +664,8 @@ module vert_ucode_quicksort (
 
       //
       case (1'b1)
-        da_ucode.is_ret:  fa_pc_w  = pc_t'(da_rf__rdata [1]);
-        
-        da_ucode.is_call,
+        da_taken_ret:     fa_pc_w  = pc_t'(da_rf__rdata [1]);
+        da_taken_call,
         da_taken_branch:  fa_pc_w  = da_ucode.target;
         default:          fa_pc_w  = fa_pc_r + 'b1;
       endcase // case (1'b1)
@@ -706,7 +709,7 @@ module vert_ucode_quicksort (
       //
       stack__cmd_vld       = da_adv & (da_ucode.is_push | da_ucode.is_pop);
       stack__cmd_push      = da_ucode.is_push;
-      stack__cmd_push_dat  = da_rf__rdata [0];
+      stack__cmd_push_dat  = da_rf__rdata [1];
       stack__cmd_clr       = '0;
 
     end // block: stack_PROC

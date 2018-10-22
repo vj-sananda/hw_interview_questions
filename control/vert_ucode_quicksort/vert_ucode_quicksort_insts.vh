@@ -94,6 +94,7 @@ task inst_movi(reg_t dst, imm_t imm); begin
   inst_default();
   //
   da_inst_w.opcode        = MOV;
+  da_inst_w.u.mov.dst     = dst;
   da_inst_w.u.mov.is_imm  = 'b1;
   da_inst_w.u.mov.u.imm   = imm;
 end endtask
@@ -102,6 +103,7 @@ task inst_movs(reg_t dst, reg_special_t src1); begin
   inst_default();
   //
   da_inst_w.opcode            = MOV;
+  da_inst_w.u.mov.dst         = dst;
   da_inst_w.u.mov.is_special  = 'b1;
   da_inst_w.u.mov.u.special   = src1;
 end endtask
