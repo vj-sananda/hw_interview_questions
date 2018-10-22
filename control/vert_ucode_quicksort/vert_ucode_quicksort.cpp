@@ -283,7 +283,7 @@ struct Tracer : sc_core::sc_module {
         os << ", R" << s;
         os << ", " << (sel1 ? "" : "R") << u;
 
-        const uint32_t a = m_.regs[r];
+        const uint32_t a = m_.regs[s];
         const uint32_t b = sel1 ? u : m_.regs[u];
         
         expected_.check_en = true;

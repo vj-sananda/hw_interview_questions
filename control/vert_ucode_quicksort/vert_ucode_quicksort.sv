@@ -445,7 +445,7 @@ module vert_ucode_quicksort (
   //               : MOV R2, R0       ; R2 <- LO
   //               : MOV R4, R1       ; R4 <- HI
   //               : SUB.F 0, R0, R1  ; 
-  //               : JLE __qs_end     ; if ((hi - lo) <= 0) goto __end;
+  //               : JGT __qs_end     ; if ((hi - lo) <= 0) goto __end;
   //               : CALL PARTITION   ; R0 <- partition(lo, hi);
   //               : MOV R3, R0       ; R3 <- PIVOT
   //               : MOV R0, R2       ;
@@ -534,7 +534,7 @@ module vert_ucode_quicksort (
         SYM_QUICKSORT +   4: inst_mov(R2, R0);
         SYM_QUICKSORT +   5: inst_mov(R4, R1);
         SYM_QUICKSORT +   6: inst_sub(R0, R0, R1, .dst_en('b0));
-        SYM_QUICKSORT +   7: inst_j(SYM_QUICKSORT + 16, LE);
+        SYM_QUICKSORT +   7: inst_j(SYM_QUICKSORT + 16, GT);
         SYM_QUICKSORT +   8: inst_call(SYM_PARTITION);
         SYM_QUICKSORT +   9: inst_mov(R3, R0);
         SYM_QUICKSORT +  10: inst_mov(R0, R2);
@@ -664,7 +664,7 @@ module vert_ucode_quicksort (
 
       //
       case (1'b1)
-        da_taken_ret:     fa_pc_w  = pc_t'(da_rf__rdata [1]);
+        da_taken_ret:     fa_pc_w  = pc_t'(da_src1);
         da_taken_call,
         da_taken_branch:  fa_pc_w  = da_ucode.target;
         default:          fa_pc_w  = fa_pc_r + 'b1;
@@ -709,7 +709,7 @@ module vert_ucode_quicksort (
       //
       stack__cmd_vld       = da_adv & (da_ucode.is_push | da_ucode.is_pop);
       stack__cmd_push      = da_ucode.is_push;
-      stack__cmd_push_dat  = da_rf__rdata [1];
+      stack__cmd_push_dat  = da_src1;
       stack__cmd_clr       = '0;
 
     end // block: stack_PROC
@@ -722,8 +722,8 @@ module vert_ucode_quicksort (
       //
       sort__en          = da_mem_op_issue;
       sort__wen         = da_ucode.is_store;
-      sort__addr        = addr_t'(da_rf__rdata [0]);
-      sort__din         = da_rf__rdata [1];
+      sort__addr        = addr_t'(da_src0);
+      sort__din         = da_src1;
 
       // The 'momento' in this version is essentially just the rdata valid
       // as it is unnecessary to explicitly retain any state about the
