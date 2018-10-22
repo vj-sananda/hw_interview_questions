@@ -150,6 +150,22 @@ struct Tracer : sc_core::sc_module {
       m_.regs[waddr] = wdata;
     }
 
+    const bool sort__en = qs_->sort___05Fen;
+    const bool sort__wen = qs_->sort___05Fwen;
+    const uint32_t sort__addr = qs_->sort___05Faddr;
+    const uint32_t sort__din = qs_->sort___05Fdin;
+    const uint32_t sort__dout = qs_->sort___05Fdout;
+
+    if (sort__en) {
+      os << "   ";
+      if (sort__wen) {
+        os << "(mem[" << sort__addr << "] <= " << sort__din << ")";
+      } else {
+        //        os << "(mem[" << sort__addr << "] => " << sort__din << ")";
+        os << "(mem[" << sort__addr << "] => X)";
+      }
+    }
+
     if (expected_.sets_flags) {
       os << " (ZNC <= "
          << (qs_->ar_flag_z_r == 0 ? '0' : '1')
@@ -234,14 +250,24 @@ struct Tracer : sc_core::sc_module {
         expected_.next_pc++;
       } break;
       case 4: {
+        expected_.check_en = false;
         if (sel0) {
           // ST
           os << "ST R" << s << ", [R" << u << "]";
+
+          m_.mem[m_.regs[u]] = s;
         } else {
           // LD
           os << "LD R" << r << ", [R" << u << "]";
+
+          if (m_.mem.count(u) != 0) {
+            expected_.check_en = m_.mem.count(m_.regs[u]);
+            expected_.wr_en = true;
+            expected_.wr_addr = r;
+            if (expected_.check_en)
+              expected_.wr_data = m_.mem[m_.regs[u]];
+          }
         }
-        expected_.check_en = false;
         expected_.next_pc++;
       } break;
       case 6: {

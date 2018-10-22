@@ -140,7 +140,12 @@ module vert_ucode_quicksort (
   //
   `SPSRAM_SIGNALS(enqueue__, W, $clog2(N));
   `SPSRAM_SIGNALS(dequeue__, W, $clog2(N));
-  `SPSRAM_SIGNALS(sort__, W, $clog2(N));
+  //
+  logic                                 sort__en /* verilator public */;
+  logic                                 sort__wen /* verilator public */;
+  addr_t                                sort__addr /* verilator public */;
+  w_t                                   sort__din /* verilator public */;
+  w_t                                   sort__dout /* verilator public */;
   //
   logic                                 sorted_vld_w;
   logic                                 sorted_sop_w;
@@ -680,9 +685,10 @@ module vert_ucode_quicksort (
       //
       da_rf__wen_w  = da_adv & da_ucode.dst_en;
       da_rf__wa_w   = da_ucode.dst;
-      priority casez ({da_ucode.is_pop, da_ucode.dst_is_blink})
-        2'b1?:   da_rf__wdata_w  = stack__cmd_pop_dat_r;
-        2'b01:   da_rf__wdata_w  = w_t'(fa_pc_r);
+      priority casez ({da_ucode.is_pop, da_ucode.dst_is_blink, da_ucode.is_load})
+        3'b1??:  da_rf__wdata_w  = stack__cmd_pop_dat_r;
+        3'b010:  da_rf__wdata_w  = w_t'(fa_pc_r);
+        3'b001:  da_rf__wdata_w  = sort__dout;
         default: da_rf__wdata_w  = adder__y;
       endcase // priority casez ({ucode.is_pop, ucode.dst_is_blink})
 
@@ -724,6 +730,9 @@ module vert_ucode_quicksort (
       sort__wen         = da_ucode.is_store;
       sort__addr        = addr_t'(da_src0);
       sort__din         = da_src1;
+
+      //
+      sort__dout        = spsram_bank__dout [sort_bank_idx_r];
 
       // The 'momento' in this version is essentially just the rdata valid
       // as it is unnecessary to explicitly retain any state about the
