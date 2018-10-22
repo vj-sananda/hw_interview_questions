@@ -514,7 +514,7 @@ module vert_ucode_quicksort (
         SYM_PARTITION +  11: inst_sub(R0, R5, R2, .dst_en('b0));
         SYM_PARTITION +  12: inst_j(SYM_PARTITION + 17, .cc(GT));
         SYM_PARTITION +  13: inst_ld(R6, R3);
-        SYM_PARTITION +  14: inst_st(R3, R4);
+        SYM_PARTITION +  14: inst_st(R3, R5);
         SYM_PARTITION +  15: inst_st(R4, R6);
         SYM_PARTITION +  16: inst_addi(R3, R3, 'b1);
         SYM_PARTITION +  17: inst_addi(R4, R4, 'b1);
@@ -728,7 +728,7 @@ module vert_ucode_quicksort (
       //
       sort__en          = da_mem_op_issue;
       sort__wen         = da_ucode.is_store;
-      sort__addr        = addr_t'(da_src0);
+      sort__addr        = addr_t'(da_ucode.is_store ? da_src0 : da_src1);
       sort__din         = da_src1;
 
       //

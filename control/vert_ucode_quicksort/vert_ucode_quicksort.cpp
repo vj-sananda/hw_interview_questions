@@ -253,7 +253,7 @@ struct Tracer : sc_core::sc_module {
         expected_.check_en = false;
         if (sel0) {
           // ST
-          os << "ST R" << s << ", [R" << u << "]";
+          os << "ST [R" << s << "], R" << u;
 
           m_.mem[m_.regs[u]] = s;
         } else {
