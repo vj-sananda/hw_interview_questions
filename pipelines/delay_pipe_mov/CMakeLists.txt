@@ -1,5 +1,5 @@
 ##========================================================================== //
-## Copyright (c) 2016-2018, Stephen Henry
+## Copyright (c) 2016, Stephen Henry
 ## All rights reserved.
 ##
 ## Redistribution and use in source and binary forms, with or without
@@ -25,36 +25,7 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-cmake_minimum_required(VERSION 3.5)
-project(hw_interview_questions)
+emit_answer(
+  tb_delay_pipe_mov delay_pipe_mov.sv delay_pipe_mov.cpp)
 
-set(LIBTB2_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/contrib/libtb2/)
-include(${LIBTB2_ROOT}/cmake/libtb2.cmake)
-
-include_directories(${CMAKE_SOURCE_DIR}/contrib/libtb/src)
-
-macro(emit_answer target answer_sv answer_cc)
-  message(STATUS "Emit soluion: ${target}")
-  libtb2_add_include_path(${CMAKE_CURRENT_SOURCE_DIR})
-  libtb2_add_include_path(${CMAKE_CURRENT_BINARY_DIR})
-  get_filename_component(answer ${answer_sv} NAME_WE)
-  libtb2_verilate_sc(verilate_${target} ${answer} vlib)
-  add_executable(${target} ${answer_cc})
-  add_dependencies(${target} verilate_${target}) 
-  target_include_directories(${target} PUBLIC
-    ${LIBTB_ROOT}/src
-    ${CMAKE_CURRENT_BINARY_DIR}
-    )
-  target_link_libraries(${target} tb2 systemc scv ${vlib} vcom)
-endmacro()
-
-add_subdirectory(contrib)
-add_subdirectory(design)
-add_subdirectory(general)
-add_subdirectory(arithmetic)
-add_subdirectory(clocking)
-add_subdirectory(problem_solving)
-add_subdirectory(queues)
-add_subdirectory(control)
-add_subdirectory(memory)
-add_subdirectory(pipelines)
+add_test(NAME tb_delay_pipe_mov_0 COMMAND tb_delay_pipe_mov --seed=1)
