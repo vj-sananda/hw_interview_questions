@@ -137,6 +137,4 @@ module delay_pipe_mov #(parameter int N = 5, parameter int W = 32) (
 
   end endgenerate
     
-      
-  
 endmodule
