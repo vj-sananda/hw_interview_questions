@@ -449,15 +449,15 @@ module vert_ucode_quicksort (
   //               : PUSH R4          ;
   //               : MOV R2, R0       ; R2 <- LO
   //               : MOV R4, R1       ; R4 <- HI
-  //               : SUB.F 0, R0, R1  ; 
+  //               : SUB.F 0, R1, R0  ;
   //               : JGT __qs_end     ; if ((hi - lo) <= 0) goto __end;
   //               : CALL PARTITION   ; R0 <- partition(lo, hi);
   //               : MOV R3, R0       ; R3 <- PIVOT
   //               : MOV R0, R2       ;
   //               : SUBI R1, R3, 1   ;
   //               : CALL QUICKSORT   ; quicksort(lo, p - 1);
-  //               : ADDI R0, R2, 1   ;
-  //               : MOV R1, R3       ;
+  //               : ADDI R0, R3, 1   ;
+  //               : MOV R1, R4       ;
   //               : CALL QUICKSORT   ; quicksort(p + 1, hi);
   //   __qs_end    : POP R4           ;
   //               : POP R3           ;
@@ -545,8 +545,8 @@ module vert_ucode_quicksort (
         SYM_QUICKSORT +  10: inst_mov(R0, R2);
         SYM_QUICKSORT +  11: inst_subi(R1, R3, 'd1);
         SYM_QUICKSORT +  12: inst_call(SYM_QUICKSORT);
-        SYM_QUICKSORT +  13: inst_addi(R0, R2, 'd1);
-        SYM_QUICKSORT +  14: inst_mov(R1, R3);
+        SYM_QUICKSORT +  13: inst_addi(R0, R3, 'd1);
+        SYM_QUICKSORT +  14: inst_mov(R1, R4);
         SYM_QUICKSORT +  15: inst_call(SYM_QUICKSORT);
         SYM_QUICKSORT +  16: inst_pop(R4);
         SYM_QUICKSORT +  17: inst_pop(R3);
