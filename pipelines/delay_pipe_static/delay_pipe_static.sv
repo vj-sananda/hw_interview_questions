@@ -64,11 +64,11 @@ module delay_pipe_static #(parameter int N = 5, parameter int W = 32) (
   } pipe_t;
 
   //
-  pipe_t  [N-2:0]        pipe_r;
-  pipe_t  [N-2:0]        pipe_w;
-  logic [N-2:0]          pipe_en;
+  pipe_t  [N-1:0]        pipe_r;
+  pipe_t  [N-1:0]        pipe_w;
+  logic [N-1:0]          pipe_en;
 
-  typedef logic [$clog2(N-1)-1:0] ptr_t;
+  typedef logic [$clog2(N)-1:0] ptr_t;
 
   //
   ptr_t                  rd_ptr_r;
@@ -93,7 +93,7 @@ module delay_pipe_static #(parameter int N = 5, parameter int W = 32) (
   generate if (N > 0) begin
 
     function ptr_t inc_and_clip(ptr_t n); begin
-      if (n == ptr_t'(N - 2))
+      if (n == ptr_t'(N - 1))
         inc_and_clip  = 'b0;
       else
         inc_and_clip  = n + 'b1;
@@ -156,12 +156,17 @@ module delay_pipe_static #(parameter int N = 5, parameter int W = 32) (
 
     //
     always_ff @(posedge clk)
-      if (pipe_en [wr_ptr_r])
-        pipe_r [wr_ptr_r] <= '{vld:in_vld, dat:in};
-      else
-        // If no incoming data, kill valid for the pipeline stage but
-        // retain existing data to reduce power.
-        pipe_r [wr_ptr_r].vld <= 'b0;
+      if (rst) begin
+        for (int i = 0; i < N; i++)
+          pipe_r [i].vld <= 'b0;
+      end else begin
+        if (pipe_en [wr_ptr_r])
+          pipe_r [wr_ptr_r] <= '{vld:in_vld, dat:in};
+        else
+          // If no incoming data, kill valid for the pipeline stage but
+          // retain existing data to reduce power.
+          pipe_r [wr_ptr_r].vld <= 'b0;
+      end
 
     //
     always_ff @(posedge clk)
@@ -173,7 +178,7 @@ module delay_pipe_static #(parameter int N = 5, parameter int W = 32) (
     //
     always_ff @(posedge clk)
       if (rst)
-        wr_ptr_r <= 'b0;
+        wr_ptr_r <= ptr_t'(N - 1);
       else
         wr_ptr_r <= wr_ptr_w;
 
