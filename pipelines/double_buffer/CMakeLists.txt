@@ -25,7 +25,7 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-add_subdirectory(delay_pipe_mov)
-add_subdirectory(delay_pipe_static)
-add_subdirectory(comb_stall)
-add_subdirectory(double_buffer)
+emit_answer(
+  tb_double_buffer double_buffer.sv double_buffer.cpp)
+
+add_test(NAME tb_double_buffer_0 COMMAND tb_double_buffer --seed=1)
