@@ -25,6 +25,7 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-add_subdirectory(delay_pipe_mov)
-add_subdirectory(delay_pipe_static)
-add_subdirectory(comb_stall)
+emit_answer(
+  tb_comb_stall comb_stall.sv comb_stall.cpp)
+
+add_test(NAME tb_comb_stall_0 COMMAND tb_comb_stall --seed=1)
