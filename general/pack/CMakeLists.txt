@@ -1,5 +1,5 @@
 ##========================================================================== //
-## Copyright (c) 2016-2018, Stephen Henry
+## Copyright (c) 2016, Stephen Henry
 ## All rights reserved.
 ##
 ## Redistribution and use in source and binary forms, with or without
@@ -25,14 +25,4 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-add_subdirectory(count_ones)
-add_subdirectory(count_zeros_32)
-add_subdirectory(detect_sequence)
-add_subdirectory(fibonacci)
-add_subdirectory(missing_duplicated_word)
-add_subdirectory(multi_counter)
-add_subdirectory(multi_counter_variants)
-add_subdirectory(one_or_two)
-add_subdirectory(zero_indices_slow)
-add_subdirectory(zero_indices_fast)
-add_subdirectory(pack)
+emit_answer(tb_pack pack.sv pack.cpp)
