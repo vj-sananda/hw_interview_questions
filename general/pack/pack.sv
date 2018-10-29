@@ -111,7 +111,7 @@ module pack #(parameter int N = 8, parameter int W = 32) (
       // preceeding valid slots (zero indexed).
       //
       for (int i = 0; i < N; i++)
-        cnt [i]    = popcnt(sel_n(in_vld_w, i)) - 'b1;
+        cnt [i]    = popcnt(sel_n(in_vld_w, i));
 
       // NxN crossbar to issue each valid input channel to its
       // corresponding output slot.
@@ -121,7 +121,7 @@ module pack #(parameter int N = 8, parameter int W = 32) (
         //
         out_w [i]  = '0;
         for (int j = i; j < N; j++)
-          out_w [i] |= (in_vld_w [j] & (cnt [j] == idx_t'(i))) ? in_w [j] : 'b0;
+          out_w [i] |= (in_vld_w [j] & (cnt [j] == idx_t'(i + 1))) ? in_w [j] : 'b0;
 
         end // for (int i = 0; i < N; i++)
 
