@@ -25,8 +25,7 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-add_subdirectory(delay_pipe_mov)
-add_subdirectory(delay_pipe_static)
-add_subdirectory(comb_stall)
-add_subdirectory(double_buffer)
-add_subdirectory(replay)
+emit_answer(
+  tb_replay replay.sv replay.cpp)
+
+add_test(NAME tb_replay_0 COMMAND tb_replay --seed=1)
