@@ -102,7 +102,7 @@ struct PackTb : libtb2::Top<Vpack> {
 
     SC_THREAD(t_stimulus);
 
-    generate_stimulus(1024);
+    generate_stimulus(1024 << 1);
     register_uut(uut_);
     vcd_on();
 

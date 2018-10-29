@@ -106,10 +106,16 @@ module pack #(parameter int N = 8, parameter int W = 32) (
   always_comb
     begin : cntrl_PROC
 
+      // Compute the index of the i'th channel in the output
+      // vector. This is carried out using a population count of the
+      // preceeding valid slots (zero indexed).
       //
       for (int i = 0; i < N; i++)
         cnt [i]    = popcnt(sel_n(in_vld_w, i)) - 'b1;
 
+      // NxN crossbar to issue each valid input channel to its
+      // corresponding output slot.
+      //
       for (int i = 0; i < N; i++) begin
 
         //
@@ -117,10 +123,16 @@ module pack #(parameter int N = 8, parameter int W = 32) (
         for (int j = 0; j < N; j++)
           out_w [i] |= (in_vld_w [j] & (cnt [j] == idx_t'(i))) ? in_w [j] : 'b0;
 
-      end // for (int i = 0; i < N; i++)
+        end // for (int i = 0; i < N; i++)
 
       //
       out_pass_w     = in_pass;
+
+      // Compute a unary mask denoting the locations in the output
+      // vector containing valid state. This is performed using a
+      // population count of all valid entries and by forming the
+      // corresponding unary-encoded representation.
+      //
       out_vld_w      = ~('1 << popcnt(in_vld_w));
 
       //
