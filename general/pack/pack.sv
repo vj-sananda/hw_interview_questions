@@ -45,6 +45,7 @@ module pack #(parameter int N = 8, parameter int W = 32) (
    //                                                                         //
    //======================================================================== //
 
+   , input                                        in_pass
    , input [N-1:0][W-1:0]                         in_w
    , input [N-1:0]                                in_vld_w
 
@@ -54,6 +55,7 @@ module pack #(parameter int N = 8, parameter int W = 32) (
    //                                                                         //
    //======================================================================== //
 
+   , output logic                                 out_pass_r
    , output logic [N-1:0][W-1:0]                  out_r
    , output logic [N-1:0]                         out_vld_r
 );
@@ -61,7 +63,7 @@ module pack #(parameter int N = 8, parameter int W = 32) (
   //
   localparam int IDX_W  = $clog2(N);
 
-  typedef logic [IDX_W-1:0] idx_t;
+  typedef logic [IDX_W:0] idx_t;
 
   //
   logic [N-1:0][W-1:0]                       out_r;
@@ -73,7 +75,10 @@ module pack #(parameter int N = 8, parameter int W = 32) (
   logic [N-1:0]                              out_vld_w;
 
   //
-  logic [N-1:0][IDX_W-1:0]                   cnt;
+  logic [N-1:0][IDX_W:0]                     cnt;
+
+  //
+  logic                                      out_pass_w;
   
   // ======================================================================== //
   //                                                                          //
@@ -83,43 +88,42 @@ module pack #(parameter int N = 8, parameter int W = 32) (
 
   // ------------------------------------------------------------------------ //
   //
-  function [IDX_W-1:0] popcnt(logic [N-1:0] n); begin
+  function [IDX_W:0] popcnt(logic [N-1:0] n); begin
     popcnt      = '0;
     for (int i = 0; i < $bits(n); i++)
       popcnt += n[i] ? 'b1 : 'b0;
   end endfunction
-  
-  // ------------------------------------------------------------------------ //
+
   //
-  function [N-1:0] mask_off_n(logic [N-1:0] a, int n); begin
-    mask_off_n  = a;
-    for (int i = 0; i < n; i++)
-      mask_off_n [i]  = 'b0;
+  function [N-1:0] sel_n(logic [N-1:0] n, int j); begin
+    sel_n  = '0;
+    for (int i = 0; i <= j; i++)
+      sel_n [i]  = n [i];
   end endfunction
-
-  function [N-1:0] to_unary(logic [IDX_W-1:0] n); begin
-    to_unary  = ~('1 << n);
-  end endfunction
-
+       
   // ------------------------------------------------------------------------ //
   //
   always_comb
     begin : cntrl_PROC
 
+      //
+      for (int i = 0; i < N; i++)
+        cnt [i]    = popcnt(sel_n(in_vld_w, i)) - 'b1;
 
       for (int i = 0; i < N; i++) begin
 
-        cnt [i]    = popcnt(mask_off_n(~in_vld_w, i));
-
+        //
         out_w [i]  = '0;
-        
-        for (int j = i; j < N; j++)
-          out_w [i] |= (cnt [i] == idx_t'(j)) ? in_w [i] : '0;
+        for (int j = 0; j < N; j++)
+          out_w [i] |= (in_vld_w [j] & (cnt [j] == idx_t'(i))) ? in_w [j] : 'b0;
 
       end // for (int i = 0; i < N; i++)
 
-      out_vld_w      = to_unary(popcnt(in_vld_w));
+      //
+      out_pass_w     = in_pass;
+      out_vld_w      = ~('1 << popcnt(in_vld_w));
 
+      //
       out_en         = out_vld_w;
 
     end // block: cntrl_PROC
@@ -145,6 +149,14 @@ module pack #(parameter int N = 8, parameter int W = 32) (
       if (out_en [i])
         out_r [i] <= out_w [i];
 
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      out_pass_r <= '0;
+    else
+      out_pass_r <= out_pass_w;
+  
 endmodule // pack
 
   
