@@ -218,10 +218,8 @@ module replay #(parameter int N = 10, parameter int W = 32) (
   always_ff @(posedge clk)
     if (rst)
       vld_r <= 'b0;
-    else begin
-      for (int i = 1; i < N; i++)
-        vld_r [i] <= vld_w [i];
-    end
+    else
+      vld_r <= vld_w;
   
   // ------------------------------------------------------------------------ //
   //
