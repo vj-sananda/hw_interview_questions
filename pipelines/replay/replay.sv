@@ -169,6 +169,10 @@ module replay #(parameter int N = 10, parameter int W = 32) (
   always_comb
     begin : pipe_PROC
 
+      // Replays are injected synthetically by the TB. For correct
+      // operation the restart address must be valid, therefore the
+      // replay request is held until the associated stage becomes
+      // valid, when it is then applied.
       //
       casez ({replay_s4_req, replay_s4_r, vld_r [4]})
         3'b1_0_?: replay_s4_w  = 1'b1;
@@ -203,7 +207,7 @@ module replay #(parameter int N = 10, parameter int W = 32) (
 
       //
       for (int i = N - 2; i >= 0; i--)
-        stall [i]  = ((i == 0) ? 1'b1 :vld_r [i]) & (stall_req [i] | stall [i + 1]);
+        stall [i]  = ((i == 0) ? 1'b1 : vld_r [i]) & (stall_req [i] | stall [i + 1]);
       
       //
       in_accept    = (~full_r);
