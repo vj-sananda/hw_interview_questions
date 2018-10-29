@@ -120,7 +120,7 @@ module pack #(parameter int N = 8, parameter int W = 32) (
 
         //
         out_w [i]  = '0;
-        for (int j = 0; j < N; j++)
+        for (int j = i; j < N; j++)
           out_w [i] |= (in_vld_w [j] & (cnt [j] == idx_t'(i))) ? in_w [j] : 'b0;
 
         end // for (int i = 0; i < N; i++)
