@@ -65,7 +65,8 @@ module replay #(parameter int N = 10, parameter int W = 32) (
    //                                                                         //
    //======================================================================== //
 
-   , input  logic                                 replay_s8_w
+   , input  logic                                 replay_s4_req
+   , input  logic                                 replay_s8_req
    , input  logic   [N-1:0]                       stall_req
 );
 
@@ -74,13 +75,18 @@ module replay #(parameter int N = 10, parameter int W = 32) (
     logic [2:0]  p;
   } ptr_t;
 
+  typedef struct packed {
+    logic [W-1:0] w;
+    ptr_t         ptr;
+  } ucode_t;
+
   //
   logic [N-1:1]                         vld_r;
   logic [N-1:1]                         vld_w;
 
   //
-  logic [N-1:1][W-1:0]                  ucode_r;
-  logic [N-1:1][W-1:0]                  ucode_w;
+  ucode_t [N-1:1]                       ucode_r;
+  ucode_t [N-1:1]                       ucode_w;
 
   //
   logic [N-1:0]                         adv;
@@ -90,7 +96,12 @@ module replay #(parameter int N = 10, parameter int W = 32) (
 
   //
   logic                                 commit_s8;
+  logic                                 replay_s4_w;
+  logic                                 replay_s8_w;
+  logic                                 replay_s4_r;
   logic                                 replay_s8_r;
+  logic                                 replay_s4;
+  logic                                 replay_s8;
 
   //
   ptr_t                                 rd_ptr_arch_r;
@@ -129,12 +140,13 @@ module replay #(parameter int N = 10, parameter int W = 32) (
       rd_ptr_arch_w  = commit_s8 ? (rd_ptr_arch_r + 'b1) : rd_ptr_arch_r;
 
       //
-      rd_ptr_spec_en = (replay_s8_r | adv [0]);
+      rd_ptr_spec_en = (replay_s4 | replay_s8 | adv [0]);
 
       //
-      casez ({replay_s8_r, adv [0]})
-        2'b1?:   rd_ptr_spec_w  = rd_ptr_arch_r;
-        2'b01:   rd_ptr_spec_w  = rd_ptr_spec_r + 'b1;
+      casez ({replay_s8, replay_s4, adv [0]})
+        3'b1??:  rd_ptr_spec_w  = ucode_r [8].ptr;
+        3'b01?:  rd_ptr_spec_w  = ucode_r [4].ptr;
+        3'b001:  rd_ptr_spec_w  = rd_ptr_spec_r + 'b1;
         default: rd_ptr_spec_w  = rd_ptr_spec_r;
       endcase // casez ({replay_s8_r, adv [0]})
       
@@ -157,6 +169,26 @@ module replay #(parameter int N = 10, parameter int W = 32) (
   always_comb
     begin : pipe_PROC
 
+      //
+      casez ({replay_s4_req, replay_s4_r, vld_r [4]})
+        3'b1_0_?: replay_s4_w  = 1'b1;
+        3'b?_1_1: replay_s4_w  = 1'b0;
+        default:  replay_s4_w  = replay_s4_r;
+      endcase // casez ({replay_s4_req, replay_s4_r, vld_r [4]})
+
+      //
+      replay_s4  = replay_s4_r & vld_r [4];
+
+      //
+      casez ({replay_s8_req, replay_s8_r, vld_r [8]})
+        3'b1_0_?: replay_s8_w  = 1'b1;
+        3'b?_1_1: replay_s8_w  = 1'b0;
+        default:  replay_s8_w  = replay_s8_r;
+      endcase // casez ({replay_s8_req, replay_s8_r, vld_r [8]})
+
+      //
+      replay_s8  = replay_s8_r & vld_r [8];
+
       // The final (output) stage cannot be stalled (for DV simplicity).
       //
       stall [N - 1]  = 1'b0;
@@ -164,8 +196,10 @@ module replay #(parameter int N = 10, parameter int W = 32) (
       // Kill stages on upstream replay.
       //
       kill           = '0;
-      for (int i = 0; i < N; i++)
-        kill [i]  = (i <= 8) ? replay_s8_r : '0;
+      for (int i = 0; i < N; i++) begin
+        kill [i]  |= (i <= 8) ? replay_s8 : '0;
+        kill [i]  |= (i <= 4) ? replay_s4 : '0;
+      end
 
       //
       for (int i = N - 2; i >= 0; i--)
@@ -191,19 +225,23 @@ module replay #(parameter int N = 10, parameter int W = 32) (
           default: vld_w [i]  = vld_r [i];
         endcase // casez ({kill [i], stall [i]})
 
-      end // for (int i = 1; i < N; i++)
+        end // for (int i = 1; i < N; i++)
                     
       //
-      for (int i = 1; i < N; i++)
-        ucode_w [i]  = (i == 1) ? fifo_r [rd_ptr_spec_r] : ucode_r [i - 1];
+      for (int i = 1; i < N; i++) begin
+        if (i == 1)
+          ucode_w [i]  = '{w:fifo_r [rd_ptr_spec_r], ptr:rd_ptr_spec_r};
+        else
+          ucode_w [i]  = ucode_r [i - 1];
+      end
 
       // Commit point at stage 8. 
       //
-      commit_s8      = (~replay_s8_r) & (adv [8]);
+      commit_s8  = (~replay_s8_r) & (adv [8]);
                  
       //
-      out_r          = ucode_r [N - 1];
-      out_vld_r      = vld_r [N - 1];
+      out_r      = ucode_r [N - 1].w;
+      out_vld_r  = vld_r [N - 1];
 
     end // block: pipe_PROC
   
@@ -227,6 +265,14 @@ module replay #(parameter int N = 10, parameter int W = 32) (
     for (int i = 1; i < N; i++)
       if (en [i])
         ucode_r [i] <= ucode_w [i];
+
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      replay_s4_r <= '0;
+    else
+      replay_s4_r <= replay_s4_w;
 
   // ------------------------------------------------------------------------ //
   //

@@ -37,7 +37,8 @@
   __func(in_accept, bool)                       \
   __func(out_r, uint32_t)                       \
   __func(out_vld_r, bool)                       \
-  __func(replay_s8_w, bool)                     \
+  __func(replay_s4_req, bool)                   \
+  __func(replay_s8_req, bool)                   \
   __func(stall_req, uint32_t)
 
 typedef Vreplay uut_t;
@@ -90,13 +91,18 @@ private:
     replay_bag.add(false, 99);
     replay->set_mode(replay_bag);
     
-    replay_s8_w_ = false;
+    replay_s8_req_ = false;
+    replay_s4_req_ = false;
     while (true) {
       replay->next();
+      replay_s8_req_ = *replay;
 
-      replay_s8_w_ = *replay;
+      replay->next();
+      replay_s4_req_ = *replay;
+      
       wait(clk_.posedge_event());
-      replay_s8_w_ = false;
+      replay_s8_req_ = false;
+      replay_s4_req_ = false;
     }
   }
   void m_stall() {
