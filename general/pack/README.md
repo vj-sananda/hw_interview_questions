@@ -9,13 +9,11 @@ that all non-valid channels are packed towards the MSB.
 # Commentary
 
 There are two aspects to this problem. Firstly, for each input
-channel, the corresponding output channel should be computed. It can
-be noted that for a given input channel A, the corresponding output
-channel is (also) A, if and only if the preceeding channels are
-valid. Otherwise the output channel is A - offset, where offset is the
-number of non-valid locations preceeding A. For each input, the
-corresponding output channel can be computed by performing a
-population count of the non-valid channels.
+channel, the corresponding output channel should be computed. This can
+be carried out by considering the number of valid locations preceeding
+the current channel. By carrying a population count on the valid
+vector of those locations [0,A) the final output location can be
+derived.
 
 The second aspect of the problem involves the permutation. Once the
 mapping between input to output channel has been computed, the output
