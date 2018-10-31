@@ -48,7 +48,10 @@ module read_modify_write (
    //======================================================================== //
 
    , input                                        in_pass
-   , input read_modify_write_pkg::inst_t          in_inst
+   , input read_modify_write_pkg::reg_t           in_inst_ra_1
+   , input read_modify_write_pkg::reg_t           in_inst_ra_0
+   , input read_modify_write_pkg::reg_t           in_inst_wa
+   , input read_modify_write_pkg::opcode_t        in_inst_op
    , input read_modify_write_pkg::imm_t           in_imm
    //
    , output logic                                 in_accept
@@ -77,7 +80,7 @@ module read_modify_write (
 
   typedef struct packed {
     logic        o;
-    logic [2:0]  p;
+    logic [3:0]  p;
   } ptr_t;
 
   typedef struct packed {
@@ -92,7 +95,7 @@ module read_modify_write (
     imm_t  imm;
     ptr_t  ptr;
     logic [1:0]  wrbk_vld;
-    word_t wrbk_dat;
+    word_t wrbk;
   } ucode_t;
 
   //
@@ -101,15 +104,18 @@ module read_modify_write (
   logic [9:1]                           vld_r;
   logic [9:1]                           vld_w;
 
+  /* verilator lint_off UNOPTFLAT */
   //
   ucode_t [9:1]                         ucode_r;
   ucode_t [9:1]                         ucode_w;
+  /* verilator lint_on UNOPTFLAT */
 
   //
   logic [9:0]                           adv;
   logic [9:1]                           en;
   logic [9:0]                           stall;
   logic [9:0]                           kill;
+  logic                                 stall_wrbk_s9;
 
   //
   logic                                 commit_s8;
@@ -138,7 +144,7 @@ module read_modify_write (
   logic                                 full_w;
   logic                                 full_r;
   //
-  fifo_word_t [7:0]                     fifo_r;
+  fifo_word_t [15:0]                    fifo_r;
   logic                                 fifo_en;
   //
   logic [1:0]                           rf__ren;
@@ -153,9 +159,15 @@ module read_modify_write (
   word_t [1:0]                          fwd__s4_rdata;
   word_t [1:0]                          fwd__s5_rdata;
   word_t [1:0]                          fwd__s6_rdata;
+  //
+  inst_t                                in_inst;
+  //
+  logic                                 out_vld_w;
+  reg_t                                 out_wa_w;
+  word_t                                out_wdata_w;
   
   //
-  function word_t exe(opcode_t op, word_t [1:0] r); begin
+  function word_t exe(opcode_t op, imm_t imm, word_t [1:0] r); begin
     exe  = '0;
     case (op)
       OP_AND: exe   = (r[0] & r[1]);
@@ -166,6 +178,7 @@ module read_modify_write (
       OP_SUB: exe   = r[0] - r[1];
       OP_MOV0: exe  = r[0];
       OP_MOV1: exe  = r[1];
+      OP_MOVI: exe  = imm;
       default: exe  = r[0];
     endcase // case (op)
   end endfunction
@@ -175,6 +188,19 @@ module read_modify_write (
   // Combinatorial Logic                                                      //
   //                                                                          //
   // ======================================================================== //
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : in_inst_PROC
+
+      in_inst         = '0;
+      in_inst.ra [1]  = in_inst_ra_1;
+      in_inst.ra [0]  = in_inst_ra_0;
+      in_inst.wa      = in_inst_wa;
+      in_inst.op      = in_inst_op;
+
+    end // block: in_inst_PROC
   
   // ------------------------------------------------------------------------ //
   //
@@ -197,7 +223,7 @@ module read_modify_write (
       endcase // casez ({replay_s8_r, adv [0]})
       
       //
-//      fifo_en   = in_vld & in_accept;
+      fifo_en   = in_pass & in_accept;
 
       //
       wr_ptr_en = fifo_en;
@@ -209,6 +235,7 @@ module read_modify_write (
                  (rd_ptr_arch_w.p == wr_ptr_w.p);
 
     end // block: front_end_PROC
+
   
   // ------------------------------------------------------------------------ //
   //
@@ -246,19 +273,8 @@ module read_modify_write (
         kill [i]  |= (i <= 8) ? replay_s8 : '0;
         kill [i]  |= (i <= 4) ? replay_s4 : '0;
       end
-
-      // The final (output) stage cannot be stalled (for DV simplicity).
-      //
-      stall [9]    = 1'b0;
-
-      // TEMP: Verilator warning incorrect?
-
-      /* verilator lint_off ALWCOMBORDER */
-      for (int i = 8; i >= 0; i--)
-        stall [i]  = ((i == 0) ? 1'b1 : vld_r [i]) & (stall_req [i] | stall [i + 1]);
-      /* verilator lint_on ALWCOMBORDER */
                   
-                  //
+      //
       in_accept    = (~full_r);
 
       //
@@ -285,77 +301,174 @@ module read_modify_write (
       commit_s8    = (~replay_s8_r) & (adv [8]);
                  
       //
-      out_vld_r    = vld_r [9];
-      out_wa_r     = '0;
-      out_wdata_r  = '0;
+      out_vld_w    = adv [9];
+      out_wa_w     = ucode_r [9].inst.wa;
+      out_wdata_w  = ucode_r [9].wdata;
 
     end // block: pipe_PROC
+
   
   // ------------------------------------------------------------------------ //
   //
   always_comb
-    begin : fwd_s4_PROC
+    begin : stall_PROC
+
+      //
+      reg_t wa_9          = ucode_r [9].inst.wa;
+
+      //
+      logic stall_on_fwd  = (stall_req[8:4] != '0);
+
+      // The final writeback to the machine's register file must be
+      // held-up (stalled) if there exists a prior (upstream) stage
+      // that is presently stalled and would otherwise capture the
+      // bypass on the writeback. Without this stall condition, the
+      // upstream stage would fail to latch new value and would retain
+      // the old, prior value.
+      //
+      // This stall is required for correct operation in this
+      // synthetic example only because stalls may be requested at any
+      // stage. In a standard CPU pipeline, this is unlikely to occur,
+      // but nevertheless can be considered to be a representative
+      // example of a complex, data-dependent stall condition in a
+      // pipeline.
+      //
+      stall_wrbk_s9       = 1'b0;
+      for (int i = 4; i < 9; i++) begin
+        for (int ra = 0; ra < 2; ra++) begin
+          reg_t ra_i     = ucode_r [i].inst.ra [ra];
+          
+          stall_wrbk_s9 |= (vld_r [i] & stall_on_fwd & (wa_9 == ra_i));
+        end
+      end
+                                
+      // Unroll loop, otherwise verilator becomes confused thinking that
+      // a combinatorial loop is present.
+      //
+      stall [9]      = vld_r [9] & (stall_req [9] | stall_wrbk_s9 | 1'b0);
+      stall [8]      = vld_r [8] & (stall_req [8] | stall [9]);
+      stall [7]      = vld_r [7] & (stall_req [7] | stall [8]);
+      stall [6]      = vld_r [6] & (stall_req [6] | stall [7]);
+      stall [5]      = vld_r [5] & (stall_req [5] | stall [6]);
+      stall [4]      = vld_r [4] & (stall_req [4] | stall [5]);
+      stall [3]      = vld_r [3] & (stall_req [3] | stall [4]);
+      stall [2]      = vld_r [2] & (stall_req [3] | stall [3]);
+      stall [1]      = vld_r [1] & (stall_req [2] | stall [2]);
+      stall [0]      = (stall_req [1] | stall [1]);
+
+    end // block: stall_PROC
+
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : ucode_s04_PROC
+
+
+      // S0
+      //
+      ucode_w [1]       = '0;
+      ucode_w [1].inst  = fifo_r [rd_ptr_spec_r.p].inst;
+      ucode_w [1].imm   = fifo_r [rd_ptr_spec_r.p].imm;
+      ucode_w [1].ptr   = rd_ptr_spec_r;
+
+      // S1
+      //
+      ucode_w [2]       = ucode_r [1];
+
+      // S2
+      //
+      ucode_w [3]       = ucode_r [2];
+
+      // S3
+      //
+      ucode_w [4]                 = ucode_r [3];
+      ucode_w [4].rdata           = fwd__s3_rdata;
+      for (int i = 0; i < 2; i++)
+        ucode_w [4].wrbk_vld [i]  = rf__wen & (rf__wa == ucode_r [3].inst.ra [i]);
+      ucode_w [4].wrbk            = rf__wdata;
+
+    end // block: ucode_s04_PROC
+
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : ucode_s4_PROC
 
       // TODO: bypass writeback
 
       for (int i = 0; i < 2; i++) begin
-        logic [2:0] byp;
+        logic [3:0] byp;
         reg_t ra;
         
         //
         ra  = ucode_r [4].inst.ra [i];
 
         //
-        byp [0]  = vld_r [7] & (ra == ucode_r [7].inst.wa);
+        byp [3]  = vld_r [6] & (ra == ucode_r [6].inst.wa);
+        byp [2]  = vld_r [7] & (ra == ucode_r [7].inst.wa);
         byp [1]  = vld_r [8] & (ra == ucode_r [8].inst.wa);
-        byp [2]  = vld_r [9] & (ra == ucode_r [9].inst.wa);
+        byp [0]  = vld_r [9] & (ra == ucode_r [9].inst.wa);
         
         //
-        priority casez ({byp, ucode_r [4].wrbk_vld})
-          4'b1??_?: fwd__s4_rdata [i]  = ucode_r [8].wdata;
-          4'b01?_?: fwd__s4_rdata [i]  = ucode_w [9].wdata;
-          4'b001_?: fwd__s4_rdata [i]  = ucode_r [9].wdata;
-          4'b000_1: fwd__s4_rdata [i]  = ucode_r [4].wrbk;
-          default:  fwd__s4_rdata [i]  = rf__rdata [i];
+        priority casez ({byp, ucode_r [4].wrbk_vld [i]})
+          5'b1???_?: fwd__s4_rdata [i]  = ucode_w [7].wdata;
+          5'b01??_?: fwd__s4_rdata [i]  = ucode_r [7].wdata;
+          5'b001?_?: fwd__s4_rdata [i]  = ucode_r [8].wdata;
+          5'b0001_?: fwd__s4_rdata [i]  = ucode_r [9].wdata;
+          5'b0000_1: fwd__s4_rdata [i]  = ucode_r [4].wrbk;
+          default:   fwd__s4_rdata [i]  = rf__rdata [i];
         endcase
 
-      end // for (int i  = 0; i < 2; i++)
+        end // for (int i = 0; i < 2; i++)
 
-    end // block: fwd_s4_PROC
+      //
+      ucode_w [5]        = ucode_r [4];
+      ucode_w [5].rdata  = fwd__s4_rdata;
+
+    end // block: ucode_s4_PROC
   
   // ------------------------------------------------------------------------ //
   //
   always_comb
-    begin : fwd_s5_PROC
+    begin : ucode_s5_PROC
 
       for (int i = 0; i < 2; i++) begin
-        logic [2:0] byp;
+        logic [3:0] byp;
         reg_t ra;
         
         //
         ra  = ucode_r [5].inst.ra [i];
 
         //
-        byp [0]  = vld_r [7] & (ra == ucode_r [7].inst.wa);
+        byp [3]  = vld_r [6] & (ra == ucode_r [6].inst.wa);
+        byp [2]  = vld_r [7] & (ra == ucode_r [7].inst.wa);
         byp [1]  = vld_r [8] & (ra == ucode_r [8].inst.wa);
-        byp [2]  = vld_r [9] & (ra == ucode_r [9].inst.wa);
+        byp [0]  = vld_r [9] & (ra == ucode_r [9].inst.wa);
         
         //
         priority casez (byp)
-          3'b1??:  fwd__s5_rdata [i]  = ucode_r [8].wdata;
-          3'b01?:  fwd__s5_rdata [i]  = ucode_w [9].wdata;
-          3'b001:  fwd__s5_rdata [i]  = ucode_r [9].wdata;
+          4'b1???: fwd__s5_rdata [i]  = ucode_w [7].wdata;
+          4'b01??: fwd__s5_rdata [i]  = ucode_r [7].wdata;
+          4'b001?: fwd__s5_rdata [i]  = ucode_r [8].wdata;
+          4'b0001: fwd__s5_rdata [i]  = ucode_r [9].wdata;
           default: fwd__s5_rdata [i]  = ucode_r [5].rdata [i];
         endcase
 
-      end // for (int i  = 0; i < 2; i++)
+      end // for (int i = 0; i < 2; i++)
 
-    end // block: fwd_s5_PROC
-  
+      //
+      ucode_w [6]        = ucode_r [5];
+      ucode_w [6].rdata  = fwd__s5_rdata;
+      
+    end // block: ucode_s5_PROC
+
+
   // ------------------------------------------------------------------------ //
   //
   always_comb
-    begin : fwd_s6_PROC
+    begin : ucode_s6_PROC
 
       for (int i = 0; i < 2; i++) begin
         logic [2:0] byp;
@@ -365,76 +478,40 @@ module read_modify_write (
         ra  = ucode_r [6].inst.ra [i];
 
         //
-        byp [0]  = vld_r [7] & (ra == ucode_r [7].inst.wa);
+        byp [2]  = vld_r [7] & (ra == ucode_r [7].inst.wa);
         byp [1]  = vld_r [8] & (ra == ucode_r [8].inst.wa);
-        byp [2]  = vld_r [9] & (ra == ucode_r [9].inst.wa);
+        byp [0]  = vld_r [9] & (ra == ucode_r [9].inst.wa);
         
         //
         priority casez (byp)
-          3'b1??:  fwd__s6_rdata [i]  = ucode_r [8].wdata;
-          3'b01?:  fwd__s6_rdata [i]  = ucode_w [9].wdata;
+          3'b1??:  fwd__s6_rdata [i]  = ucode_r [7].wdata;
+          3'b01?:  fwd__s6_rdata [i]  = ucode_r [8].wdata;
           3'b001:  fwd__s6_rdata [i]  = ucode_r [9].wdata;
           default: fwd__s6_rdata [i]  = ucode_r [6].rdata [i];
         endcase
 
-      end // for (int i  = 0; i < 2; i++)
+      end // for (int i = 0; i < 2; i++)
 
-    end // block: fwd_s6_PROC
+      // S6
+      //
+      ucode_w [7]        = ucode_r [6];
+      ucode_w [7].rdata  = fwd__s6_rdata;
+      ucode_w [7].wdata  = exe(ucode_r [6].inst.op, 
+                               ucode_r [6].imm,
+                               fwd__s6_rdata);
+
+    end // block: ucode_s6_PROC
   
   // ------------------------------------------------------------------------ //
   //
   always_comb
-    begin : ucode_PROC
+    begin : ucode_s78_PROC
 
-      // S0
-      //
-      ucode_w [1]           = '0;
-      ucode_w [1].inst      = fifo_r [rd_ptr_spec_r].inst;
-      ucode_w [1].imm       = fifo_r [rd_ptr_spec_r].imm;
-      ucode_w [1].ptr       = rd_ptr_spec_r;
+      ucode_w [8]  = ucode_r [7];
+      ucode_w [9]  = ucode_r [8];
 
-      // S2
-      //
-      ucode_w [2]           = ucode_r [1];
+    end // block: ucode_s7_PROC
 
-      // S3
-      //
-      ucode_w [3]           = ucode_r [2];
-      for (int i = 0; i < 2; i++)
-        ucode_w [3].wrbk_vld  = rf__wen & (rf__wa == ucode_r [i].inst.ra [i]);
-      ucode_w [3].wrbk        = rf__wdata;
-
-      // S4
-      //
-      ucode_w [4]             = ucode_r [3];
-      ucode_w [4].rdata       = fwd__s3_rdata;
-
-      // S5
-      //
-      ucode_w [5]             = ucode_r [4];
-      ucode_w [5].rdata       = fwd__s4_rdata;
-      
-      // S6
-      //
-      ucode_w [6]             = ucode_r [5];
-      ucode_w [6].rdata       = fwd__s5_rdata;
-
-      // S7
-      //
-      ucode_w [7]             = ucode_r [6];
-      ucode_w [7].rdata       = fwd__s6_rdata;
-      ucode_w [7].wdata       = exe(ucode_r [6].inst.op, ucode_w [7].rdata);
-
-      // S8
-      //
-      ucode_w [8]             = ucode_r [7];
-
-      // S9
-      //
-      ucode_w [9]             = ucode_r [8];
-
-    end // block: ucode_PROC
-  
   // ------------------------------------------------------------------------ //
   //
   always_comb
@@ -442,7 +519,7 @@ module read_modify_write (
 
       //
       for (int i = 0; i < 2; i++) 
-        rf__ren [i] = adv [3] & (~ucode_r [3].wrbk_vld [i]);
+        rf__ren [i] = adv [3] & (~ucode_w [4].wrbk_vld [i]);
       
       rf__ra     = ucode_r [3].inst.ra;
 
@@ -518,7 +595,7 @@ module read_modify_write (
   //
   always_ff @(posedge clk)
     if (fifo_en)
-      fifo_r [wr_ptr_r] <= '{inst:in_inst, imm:in_imm};
+      fifo_r [wr_ptr_r.p] <= '{inst:in_inst, imm:in_imm};
 
   // ------------------------------------------------------------------------ //
   //
@@ -535,6 +612,22 @@ module read_modify_write (
       empty_r <= 'b1;
     else
       empty_r <= empty_w;
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      out_vld_r <= '0;
+    else
+      out_vld_r <= out_vld_w;
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (out_vld_w) begin
+      out_wa_r    <= out_wa_w;
+      out_wdata_r <= out_wdata_w;
+    end
   
   // ======================================================================== //
   //                                                                          //

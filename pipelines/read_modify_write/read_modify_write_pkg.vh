@@ -44,6 +44,7 @@ package read_modify_write_pkg;
                              , OP_SUB = 4'b0110
                              , OP_MOV0 = 4'b0111
                              , OP_MOV1 = 4'b1000
+                             , OP_MOVI = 4'b1001
                             } opcode_t;
 
   //

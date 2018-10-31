@@ -28,12 +28,16 @@
 #include <libtb2.hpp>
 #include <vector>
 #include <iostream>
+#include <sstream>
 
 #include "vobj/Vread_modify_write.h"
 
 #define PORTS(__func)                           \
   __func(in_pass, bool)                         \
-  __func(in_inst, uint32_t)                     \
+  __func(in_inst_ra_1, uint32_t)                \
+  __func(in_inst_ra_0, uint32_t)                \
+  __func(in_inst_wa, uint32_t)                  \
+  __func(in_inst_op, uint32_t)                  \
   __func(in_imm, uint32_t)                      \
   __func(in_accept, bool)                       \
   __func(out_vld_r, bool)                       \
@@ -44,6 +48,105 @@
   __func(stall_req, uint32_t)
 
 typedef Vread_modify_write uut_t;
+
+enum OP {
+  OP_NOP = 0,
+  OP_AND = 1,
+  OP_NOT = 2,
+  OP_OR = 3,
+  OP_XOR = 4,
+  OP_ADD = 5,
+  OP_SUB = 6,
+  OP_MOV0 = 7,
+  OP_MOV1 = 8,
+  OP_MOVI = 9
+};
+
+template<>
+struct scv_extensions<OP> : public scv_enum_base<OP> {
+  SCV_ENUM_CTOR(OP) {
+    SCV_ENUM(OP_AND);
+    SCV_ENUM(OP_NOT);
+    SCV_ENUM(OP_OR);
+    SCV_ENUM(OP_XOR);
+    SCV_ENUM(OP_ADD);
+    SCV_ENUM(OP_SUB);
+    SCV_ENUM(OP_MOV0);
+    SCV_ENUM(OP_MOV1);
+    SCV_ENUM(OP_MOVI);
+  }
+};
+
+struct Inst {
+  uint32_t op;
+  uint32_t ra [2];
+  uint32_t wa;
+  uint32_t imm;
+  std::string to_string() const {
+    std::stringstream ss;
+    ss << op
+       << ra [1]
+       << ra [0]
+       << wa
+       << imm
+      ;
+    return ss.str();
+  }
+};
+
+
+
+struct Result {
+  uint32_t wa;
+  uint32_t d;
+  std::string to_string() const {
+    std::stringstream ss;
+    ss << wa
+       << d
+      ;
+    return ss.str();
+  }
+};
+
+struct Machine {
+  Result apply(const Inst & i) {
+    Result r;
+    r.wa = i.wa;
+    switch (i.op) {
+    case OP_AND: {
+      r.d = (reg[i.ra[0]] & reg[i.ra[1]]);
+    } break;
+    case OP_NOT: {
+      r.d = ~reg[i.ra[0]];
+    } break;
+    case OP_OR: {
+      r.d = (reg[i.ra[0]] | reg[i.ra[1]]);
+    } break;
+    case OP_XOR: {
+      r.d = (reg[i.ra[0]] ^ reg[i.ra[1]]);
+    } break;
+    case OP_ADD: {
+      r.d = (reg[i.ra[0]] + reg[i.ra[1]]);
+    } break;
+    case OP_SUB: {
+      r.d = (reg[i.ra[0]] - reg[i.ra[1]]);
+    } break;
+    case OP_MOV0: {
+      r.d = reg[i.ra[0]];
+    } break;
+    case OP_MOV1: {
+      r.d = reg[i.ra[1]];
+    } break;
+    case OP_MOVI: {
+      r.d = i.imm;
+    } break;
+    }
+
+    reg[r.wa] = r.d;
+    return r;
+  }
+  uint32_t reg[32];
+};
 
 struct CombStallTb : libtb2::Top<uut_t> {
   SC_HAS_PROCESS(CombStallTb);
@@ -84,6 +187,9 @@ struct CombStallTb : libtb2::Top<uut_t> {
 
     register_uut(uut_);
     vcd_on();
+
+    i_ = 0;
+    error_ = false;
   }
 private:
   void t_replay() {
@@ -117,28 +223,110 @@ private:
     }
   }
   void generate_stimulus(std::size_t n = 10) {
-    scv_smart_ptr<uint32_t> rnd;
+
     stimulus_.clear();
-    i_ = 0;
-    j_ = 0;
-    while (n-- != 0) {
-      rnd->next();
-      stimulus_.push_back(*rnd);
+
+    // Initialize machine
+    scv_smart_ptr<uint32_t> imm_ptr;
+    for (uint32_t i = 0; i < 32; i++, imm_ptr->next()) {
+      Inst inst;
+      inst.op = OP_MOVI;
+      inst.wa = i;
+      inst.imm = *imm_ptr;
+
+      expected_.push_back(m_.apply(inst));
+      stimulus_.push_back(inst);
     }
+    
+    struct reg_constraint : scv_constraint_base {
+      scv_smart_ptr<uint32_t> p;
+      SCV_CONSTRAINT_CTOR(reg_constraint) {
+        SCV_CONSTRAINT((p() >= 0) && (p() < 32)); 
+      }
+    } reg_c("reg_constraint_c");
+    
+    scv_smart_ptr<OP> op;
+    scv_smart_ptr<uint32_t> imm;
+
+    while (n-- != 0) {
+      op->next();
+      imm->next();
+
+      Inst inst;
+      inst.op =  *op; 
+      inst.imm =  *imm; 
+      inst.ra [0] = *reg_c.p; reg_c.next();
+      inst.ra [1] = *reg_c.p; reg_c.next();
+      inst.wa = *reg_c.p; reg_c.next();
+
+      expected_.push_back(m_.apply(inst));
+      stimulus_.push_back(inst);
+    }    
   }
   void t_in() {
     in_pass_ = false;
     resetter_.wait_reset_done();
 
     wait(100, SC_NS);
+
+    for (std::size_t i = 0; i < stimulus_.size(); i++) {
+
+      do { sampler_.wait_for_sample(); } while (!in_accept_);
+
+      const Inst & inst = stimulus_[i];
+
+      in_pass_ = true;
+      in_inst_ra_1_ = inst.ra[1];
+      in_inst_ra_0_ = inst.ra[0];
+      in_inst_wa_ = inst.wa;
+      in_inst_op_ = inst.op;
+      in_imm_ = inst.imm;
+
+      wait(clk_.posedge_event());
+
+      if (error_)
+        break;
+    }
+    in_pass_ = false;
+
+    wait(10, SC_NS);
     sc_core::sc_stop();
   }
   void m_out() {
+    if (out_vld_r_) {
+
+      const uint32_t out_wa = out_wa_r_;
+      const uint32_t out_wdata = out_wdata_r_;
+
+      const Result & r = expected_[i_++];
+      if (out_wa != r.wa) {
+        error_ = true;
+
+        std::cout << sc_core::sc_time_stamp()
+                  << "**** ERROR:"
+                  << " expected WA = " << r.wa
+                  << " actual WA = " << out_wa
+                  << "\n";
+      }
+
+      if (out_wdata != r.d) {
+        error_ = true;
+        
+        std::cout << sc_core::sc_time_stamp()
+                  << "**** ERROR:"
+                  << " expected WDATA = " << r.d
+                  << " actual WDATA = " << out_wdata
+                  << "\n";
+      } 
+    }
   }
   libtb2::Resetter resetter_;
   libtb2::Sampler sampler_;
-  std::vector<uint32_t> stimulus_;
-  std::size_t i_, j_;
+  Machine m_;
+  std::vector<Inst> stimulus_;
+  std::vector<Result> expected_;
+  std::size_t i_;
+  bool error_;
   sc_core::sc_clock clk_;
   sc_core::sc_signal<bool> rst_;
 #define __declare_signal(__name, __type)        \
