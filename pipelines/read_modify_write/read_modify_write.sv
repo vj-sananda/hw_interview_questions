@@ -328,8 +328,8 @@ module read_modify_write (
       //
       // This stall is required for correct operation in this
       // synthetic example only because stalls may be requested at any
-      // stage. In a standard CPU pipeline, this is unlikely to occur,
-      // but nevertheless can be considered to be a representative
+      // stage. In a standard CPU pipeline, this is unlikely to occur.
+      // Nevertheless can be considered to be a representative
       // example of a complex, data-dependent stall condition in a
       // pipeline.
       //
@@ -395,8 +395,6 @@ module read_modify_write (
   //
   always_comb
     begin : ucode_s4_PROC
-
-      // TODO: bypass writeback
 
       for (int i = 0; i < 2; i++) begin
         logic [3:0] byp;
