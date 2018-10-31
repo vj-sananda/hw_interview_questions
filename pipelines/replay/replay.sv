@@ -234,7 +234,7 @@ module replay #(parameter int N = 10, parameter int W = 32) (
       //
       for (int i = 1; i < N; i++) begin
         if (i == 1)
-          ucode_w [i]  = '{w:fifo_r [rd_ptr_spec_r], ptr:rd_ptr_spec_r};
+          ucode_w [i]  = '{w:fifo_r [rd_ptr_spec_r.p], ptr:rd_ptr_spec_r};
         else
           ucode_w [i]  = ucode_r [i - 1];
       end
@@ -314,7 +314,7 @@ module replay #(parameter int N = 10, parameter int W = 32) (
   //
   always_ff @(posedge clk)
     if (fifo_en)
-      fifo_r [wr_ptr_r] <= in;
+      fifo_r [wr_ptr_r.p] <= in;
 
   // ------------------------------------------------------------------------ //
   //
