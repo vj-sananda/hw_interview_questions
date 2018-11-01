@@ -155,7 +155,6 @@ module read_modify_write (
   reg_t                                 rf__wa;
   word_t                                rf__wdata;
   //
-  word_t [1:0]                          fwd__s3_rdata;
   word_t [1:0]                          fwd__s4_rdata;
   word_t [1:0]                          fwd__s5_rdata;
   word_t [1:0]                          fwd__s6_rdata;
@@ -383,7 +382,6 @@ module read_modify_write (
       // S3
       //
       ucode_w [4]                 = ucode_r [3];
-      ucode_w [4].rdata           = fwd__s3_rdata;
       for (int i = 0; i < 2; i++)
         ucode_w [4].wrbk_vld [i]  = rf__wen & (rf__wa == ucode_r [3].inst.ra [i]);
       ucode_w [4].wrbk            = rf__wdata;
