@@ -78,13 +78,6 @@ module precompute (
 );
   import precompute_pkg::*;
 
-  function logic [4:0] pri(logic [4:0] in); begin
-    pri  = in;
-    for (int i = 4; i >= 0; i--)
-      if (in [i])
-        pri  = ('b1 << i);
-  end endfunction
-
   typedef struct packed {
     logic        o;
     logic [3:0]  p;
@@ -105,10 +98,18 @@ module precompute (
   } ucode_t;
 
   //
-//  typedef logic [5:0] stage_fwd_t;
   typedef struct packed {
     logic        def;
-    logic [4:0]  sel;
+
+    // 6 - S10 (Writeback capture)
+    // 5 - S9
+    // 4 - S8
+    // 3 - S7
+    // 2 - S6
+    // 1 - S5
+    // 0 - S4
+    // 
+    logic [6:0] sel;
   } stage_fwd_t;
 
   //
@@ -172,21 +173,13 @@ module precompute (
   reg_t                                 out_wa_w;
   word_t                                out_wdata_w;
   //
-  word_t [1:0]                          fwd__s4_rdata;
-  word_t [1:0]                          fwd__s5_rdata;
-  word_t [1:0]                          fwd__s6_rdata;
+  word_t [1:0]                          fwd_s4_rdata;
+  word_t [1:0]                          fwd_s5_rdata;
+  word_t [1:0]                          fwd_s6_rdata;
   //
-  stage_fwd_t [1:0]                     fwd__s4_w;
-  stage_fwd_t [1:0]                     fwd__s4_r;
-  logic                                 fwd__s4_en;
-  //
-  stage_fwd_t [1:0][1:0]                fwd__s5_w;
-  stage_fwd_t [1:0][1:0]                fwd__s5_r;
-  logic [1:0]                           fwd__s5_en;
-  //
-  stage_fwd_t [2:0][1:0]                fwd__s6_w;
-  stage_fwd_t [2:0][1:0]                fwd__s6_r;
-  logic [2:0]                           fwd__s6_en;
+  stage_fwd_t [6:4][1:0]                fwd_cntrl_w;
+  stage_fwd_t [6:4][1:0]                fwd_cntrl_r;
+  logic [6:4]                           fwd_cntrl_en;
   //
   logic [1:0][9:4]                      fwd_s3;
   
@@ -414,9 +407,56 @@ module precompute (
 
   // ------------------------------------------------------------------------ //
   //
-  function stage_fwd_t encode_stage_fwd (logic [4:0] in); begin
-    encode_stage_fwd.sel  = pri(in);
+  function logic [6:0] pri(logic [6:0] in); begin
+    pri  = in;
+    for (int i = 6; i >= 0; i--)
+      if (in [i])
+        pri  = ('b1 << i);
+  end endfunction
+
+  //
+  function stage_fwd_t encode_stage_fwd (logic [6:0] in); begin
+    encode_stage_fwd.sel  = pri(in << 1);
     encode_stage_fwd.def  = (in == '0);
+  end endfunction
+
+  //
+  function stage_fwd_t adv_stage_fwd(int stg, stage_fwd_t in); begin
+    adv_stage_fwd        = in;
+
+    if (adv [stg - 1])
+      adv_stage_fwd.sel  = adv_stage_fwd.sel << 1;
+
+    if (stall [5]) begin
+      adv_stage_fwd.sel [1]  = adv_stage_fwd.sel [1];
+      adv_stage_fwd.sel [2]  = '0;
+    end
+    
+    if (stall [6]) begin
+      adv_stage_fwd.sel [2]  = adv_stage_fwd.sel [2];
+      adv_stage_fwd.sel [3]  = '0;
+    end
+
+    if (stall [7]) begin
+      adv_stage_fwd.sel [3]  = adv_stage_fwd.sel [4];
+      adv_stage_fwd.sel [4]  = '0;
+    end
+
+    if (stall [8]) begin
+      adv_stage_fwd.sel [4]  = adv_stage_fwd.sel [5];
+      adv_stage_fwd.sel [5]  = '0;
+    end
+
+    if (stall [9]) begin
+      adv_stage_fwd.sel [5]  = adv_stage_fwd.sel [6];
+      adv_stage_fwd.sel [6]  = '0;
+    end
+
+    // WRBK capture applies only to 4th stage
+    if (stg != 4)
+      adv_stage_fwd.sel [6]  = 0;
+
+    adv_stage_fwd.def = (adv_stage_fwd.sel == '0);
   end endfunction
   
   // ------------------------------------------------------------------------ //
@@ -435,48 +475,24 @@ module precompute (
       end
 
       for (int i = 0; i < 2; i++) begin
-      
         //
-        fwd__s4_w [i]  = encode_stage_fwd({ fwd_s3 [i][9],
-                                            fwd_s3 [i][8],
-                                            fwd_s3 [i][7],
-                                            fwd_s3 [i][6],
-                                            fwd_s3 [i][5] });
-        
-        //
-        fwd__s5_w [0][i]  = encode_stage_fwd({ 1'b0,
-                                               fwd_s3 [i][7],
-                                               fwd_s3 [i][6],
-                                               fwd_s3 [i][5],
-                                               fwd_s3 [i][4] });
+        fwd_cntrl_w [4][i]  = encode_stage_fwd({ 1'b0,
+                                                 fwd_s3 [i][9],
+                                                 fwd_s3 [i][8],
+                                                 fwd_s3 [i][7],
+                                                 fwd_s3 [i][6],
+                                                 fwd_s3 [i][5],
+                                                 fwd_s3 [i][4] });
 
         //
-        fwd__s5_w [1][i]  = adv [4] ? fwd__s5_r [0][i] : '0;
-
-        //
-        fwd__s6_w [0][i]  = encode_stage_fwd({ 1'b0,
-                                               1'b0,
-                                               fwd_s3 [i][6],
-                                               fwd_s3 [i][5],
-                                               fwd_s3 [i][4] });
-
-        //
-        fwd__s6_w [1][i]  = adv [4] ? fwd__s6_r [0][i] : '0;
-        fwd__s6_w [2][i]  = adv [5] ? fwd__s6_r [1][i] : '0;
+        fwd_cntrl_w [5][i]  = adv_stage_fwd(5, fwd_cntrl_r [4][i]);
+        fwd_cntrl_w [6][i]  = adv_stage_fwd(6, fwd_cntrl_r [5][i]);
 
       end // for (int i = 0; i < 2; i++)
 
-      //
-      fwd__s4_en          =  adv [3];
-
-      //
-      fwd__s5_en [0]      =  adv [3];
-      fwd__s5_en [1]      = (adv [4] | stall [5]);
-
-      //
-      fwd__s6_en [0]      =  adv [3];
-      fwd__s6_en [1]      = (adv [4] | stall [5]);
-      fwd__s6_en [2]      = (adv [5] | stall [6]);
+      fwd_cntrl_en [4]      = (adv [3] | vld_r [4]);
+      fwd_cntrl_en [5]      = (adv [4] | vld_r [5]);
+      fwd_cntrl_en [6]      = (adv [5] | vld_r [6]);
         
     end // block: precompute_PROC
   
@@ -486,25 +502,23 @@ module precompute (
     begin : ucode_s4_PROC
 
       for (int i = 0; i < 2; i++) begin
-
-        //
-        stage_fwd_t fwd    = fwd__s4_r [i];
         
         //
-        fwd__s4_rdata [i]  = '0
-                             | (fwd.sel [0] ? ucode_w [7].wdata : '0)
-                             | (fwd.sel [1] ? ucode_r [7].wdata : '0)
-                             | (fwd.sel [2] ? ucode_r [8].wdata : '0)
-                             | (fwd.sel [3] ? ucode_r [9].wdata : '0)
-                             | (fwd.sel [4] ? ucode_r [4].wrbk : '0)
-                             | (fwd.def ? rf__rdata [i] : '0)
-                           ;
+        fwd_s4_rdata [i]  =
+               '0
+             | (fwd_cntrl_r [4][i].sel [6] ? ucode_r [4].wrbk  : '0) // S10
+             | (fwd_cntrl_r [4][i].sel [5] ? ucode_r [9].wdata : '0) // S9
+             | (fwd_cntrl_r [4][i].sel [4] ? ucode_r [8].wdata : '0) // S8
+             | (fwd_cntrl_r [4][i].sel [3] ? ucode_r [7].wdata : '0) // S7
+             | (fwd_cntrl_r [4][i].sel [2] ? ucode_w [7].wdata : '0) // S6
+             | (fwd_cntrl_r [4][i].def     ? rf__rdata [i]     : '0) // X
+           ;
 
       end // for (int i = 0; i < 2; i++)
 
       //
       ucode_w [5]        = ucode_r [4];
-      ucode_w [5].rdata  = fwd__s4_rdata;
+      ucode_w [5].rdata  = fwd_s4_rdata;
 
     end // block: ucode_s4_PROC
   
@@ -516,22 +530,20 @@ module precompute (
       for (int i = 0; i < 2; i++) begin
 
         //
-        stage_fwd_t fwd    = fwd__s5_r [1][i];
-
-        //
-        fwd__s5_rdata [i]  = '0
-                            | (fwd.sel [0] ? ucode_w [7].wdata : '0)
-                            | (fwd.sel [1] ? ucode_r [7].wdata : '0)
-                            | (fwd.sel [2] ? ucode_r [8].wdata : '0)
-                            | (fwd.sel [3] ? ucode_r [9].wdata : '0)
-                            | (fwd.def ? ucode_r [5].rdata [i] : '0)
-                         ;
+        fwd_s5_rdata [i]  =
+               '0
+             | (fwd_cntrl_r [5][i].sel [5] ? ucode_r [9].wdata     : '0) // S9
+             | (fwd_cntrl_r [5][i].sel [4] ? ucode_r [8].wdata     : '0) // S8
+             | (fwd_cntrl_r [5][i].sel [3] ? ucode_r [7].wdata     : '0) // S7
+             | (fwd_cntrl_r [5][i].sel [2] ? ucode_w [7].wdata     : '0) // S6
+             | (fwd_cntrl_r [5][i].def     ? ucode_r [5].rdata [i] : '0) // X
+           ;
 
       end // for (int i = 0; i < 2; i++)
 
       //
       ucode_w [6]        = ucode_r [5];
-      ucode_w [6].rdata  = fwd__s5_rdata;
+      ucode_w [6].rdata  = fwd_s5_rdata;
       
     end // block: ucode_s5_PROC
 
@@ -545,25 +557,23 @@ module precompute (
       for (int i = 0; i < 2; i++) begin
 
         //
-        stage_fwd_t fwd    = fwd__s6_r [2][i];
-
-        //
-        fwd__s6_rdata [i]  = '0
-                            | (fwd.sel [0] ? ucode_r [7].wdata : '0)
-                            | (fwd.sel [1] ? ucode_r [8].wdata : '0)
-                            | (fwd.sel [2] ? ucode_r [9].wdata : '0)
-                            | (fwd.def ? ucode_r [6].rdata [i] : '0)
-                          ;
+        fwd_s6_rdata [i]  =
+               '0
+             | (fwd_cntrl_r [6][i].sel [5] ? ucode_r [9].wdata     : '0) // S9
+             | (fwd_cntrl_r [6][i].sel [4] ? ucode_r [8].wdata     : '0) // S8
+             | (fwd_cntrl_r [6][i].sel [3] ? ucode_r [7].wdata     : '0) // S7
+             | (fwd_cntrl_r [6][i].def     ? ucode_r [6].rdata [i] : '0) // X
+           ;
         
       end // for (int i = 0; i < 2; i++)
 
       // S6
       //
       ucode_w [7]        = ucode_r [6];
-      ucode_w [7].rdata  = fwd__s6_rdata;
+      ucode_w [7].rdata  = fwd_s6_rdata;
       ucode_w [7].wdata  = exe(ucode_r [6].inst.op, 
                                ucode_r [6].imm,
-                               fwd__s6_rdata);
+                               fwd_s6_rdata);
 
     end // block: ucode_s6_PROC
   
@@ -618,22 +628,10 @@ module precompute (
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
-    if (fwd__s4_en)
-      fwd__s4_r <= fwd__s4_w;
-
-  // ------------------------------------------------------------------------ //
-  //
-  always_ff @(posedge clk)
     for (int i = 0; i < 2; i++)
-      if (fwd__s5_en [i])
-        fwd__s5_r [i] <= fwd__s5_w [i];
-
-  // ------------------------------------------------------------------------ //
-  //
-  always_ff @(posedge clk)
-    for (int i = 0; i < 3; i++)
-      if (fwd__s6_en [i])
-        fwd__s6_r [i] <= fwd__s6_w [i];
+      for (int stg = 4; stg < 7; stg++)
+        if (fwd_cntrl_en [stg])
+          fwd_cntrl_r [stg][i] <= fwd_cntrl_w [stg][i];
   
   // ------------------------------------------------------------------------ //
   //
