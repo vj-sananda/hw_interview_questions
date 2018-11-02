@@ -415,41 +415,16 @@ module precompute (
   end endfunction
 
   //
-  function stage_fwd_t encode_stage_fwd (logic [6:0] in); begin
-    encode_stage_fwd.sel  = pri(in << 1);
-    encode_stage_fwd.def  = (in == '0);
-  end endfunction
-
-  //
   function stage_fwd_t adv_stage_fwd(int stg, stage_fwd_t in); begin
-    adv_stage_fwd        = in;
+    adv_stage_fwd  = in;
 
-    if (adv [stg - 1])
-      adv_stage_fwd.sel  = adv_stage_fwd.sel << 1;
+    for (int i = 9; i >= 4; i--) begin
 
-    if (stall [5]) begin
-      adv_stage_fwd.sel [1]  = adv_stage_fwd.sel [1];
-      adv_stage_fwd.sel [2]  = '0;
-    end
-    
-    if (stall [6]) begin
-      adv_stage_fwd.sel [2]  = adv_stage_fwd.sel [2];
-      adv_stage_fwd.sel [3]  = '0;
-    end
+      if (adv [i]) begin
+        adv_stage_fwd.sel [i - 3]  = adv_stage_fwd.sel [i - 4];
+        adv_stage_fwd.sel [i - 4]  = '0;
+      end
 
-    if (stall [7]) begin
-      adv_stage_fwd.sel [3]  = adv_stage_fwd.sel [4];
-      adv_stage_fwd.sel [4]  = '0;
-    end
-
-    if (stall [8]) begin
-      adv_stage_fwd.sel [4]  = adv_stage_fwd.sel [5];
-      adv_stage_fwd.sel [5]  = '0;
-    end
-
-    if (stall [9]) begin
-      adv_stage_fwd.sel [5]  = adv_stage_fwd.sel [6];
-      adv_stage_fwd.sel [6]  = '0;
     end
 
     // WRBK capture applies only to 4th stage
@@ -476,15 +451,17 @@ module precompute (
 
       for (int i = 0; i < 2; i++) begin
         //
-        fwd_cntrl_w [4][i]  = encode_stage_fwd({ 1'b0,
-                                                 fwd_s3 [i][9],
-                                                 fwd_s3 [i][8],
-                                                 fwd_s3 [i][7],
-                                                 fwd_s3 [i][6],
-                                                 fwd_s3 [i][5],
-                                                 fwd_s3 [i][4] });
+        stage_fwd_t fwd     = '0;
+        fwd.sel             = pri({ 1'b0,
+                                    fwd_s3 [i][9],
+                                    fwd_s3 [i][8],
+                                    fwd_s3 [i][7],
+                                    fwd_s3 [i][6],
+                                    fwd_s3 [i][5],
+                                    fwd_s3 [i][4] });
 
         //
+        fwd_cntrl_w [4][i]  = adv_stage_fwd(4, fwd);
         fwd_cntrl_w [5][i]  = adv_stage_fwd(5, fwd_cntrl_r [4][i]);
         fwd_cntrl_w [6][i]  = adv_stage_fwd(6, fwd_cntrl_r [5][i]);
 
