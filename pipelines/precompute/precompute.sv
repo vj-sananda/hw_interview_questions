@@ -428,9 +428,9 @@ module precompute (
 
     // Complicated: For each bit in the forwarding bitmap, compute
     // whether each bit is to be advanced as a function of the
-    // pipeline stage (if a stage is stalled, the bit will remain in
+    // pipeline state (if a stage is stalled, the bit will remain in
     // its prior location; if the stage advances, the bit is shifted
-    // towards the MSB by 1b).
+    // towards the MSB by 1).
     //
     // In the [6]-bit location (denoting writeback forwarding), gate
     // this against ADV [3] as this is the actual location in the
