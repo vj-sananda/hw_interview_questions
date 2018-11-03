@@ -5,11 +5,11 @@ Micro-processors/-sequencers
 # Problem Statement
 
 Sort an input array using the quicksort algorithm implemented as a
-horizontally encoded micro-sequencer.
+vertically encoded micro-sequencer.
 
 # Implementation
 
-Any sufficiently complex controller, particularlly one that is
+Any sufficiently complex controller, particularly one that is
 programmable, begins to appear not dissimilar to a traditional
 microprocessor datapath. Micro-code represents the signals used within
 a programmable data path to enable to various gates to perform some
