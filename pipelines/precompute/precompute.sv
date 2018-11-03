@@ -63,8 +63,8 @@ module precompute (
    //======================================================================== //
 
    , output                                       out_vld_r
-   , output precompute_pkg::reg_t          out_wa_r
-   , output precompute_pkg::word_t         out_wdata_r
+   , output precompute_pkg::reg_t                 out_wa_r
+   , output precompute_pkg::word_t                out_wdata_r
 
    //======================================================================== //
    //                                                                         //
@@ -415,23 +415,26 @@ module precompute (
   end endfunction
 
   //
-  function stage_fwd_t adv_stage_fwd(int stg, stage_fwd_t in); begin
-    adv_stage_fwd  = in;
+  function stage_fwd_t stage_fwd_adv(stage_fwd_t in, bit wrbk_en = 'b0); begin
+    logic [6:0]       wrbk_mask;
+    logic [9:4][6:0]  in_adv;
+    
+    //
+    wrbk_mask            = '1;
+    wrbk_mask [6]        = wrbk_en;
 
-    for (int i = 9; i >= 4; i--) begin
-
-      if (adv [i]) begin
-        adv_stage_fwd.sel [i - 3]  = adv_stage_fwd.sel [i - 4];
-        adv_stage_fwd.sel [i - 4]  = '0;
-      end
-
+    //
+    in_adv               = '0;
+    for (int i = 4; i < 10; i++) begin
+      in_adv [i][i - 3]  = (i == 9 ? adv [3] : adv [i]) ? in [i - 4] : in [i - 3];
     end
 
-    // WRBK capture applies only to 4th stage
-    if (stg != 4)
-      adv_stage_fwd.sel [6]  = 0;
+    //
+    stage_fwd_adv.sel  = '0;
+    for (int i = 4; i < 10; i++)
+      stage_fwd_adv.sel |= (wrbk_mask & in_adv [i]);
 
-    adv_stage_fwd.def = (adv_stage_fwd.sel == '0);
+    stage_fwd_adv.def    = (stage_fwd_adv.sel == '0);
   end endfunction
   
   // ------------------------------------------------------------------------ //
@@ -461,11 +464,14 @@ module precompute (
                                     fwd_s3 [i][4] });
 
         //
-        fwd_cntrl_w [4][i]  = adv_stage_fwd(4, fwd);
-        fwd_cntrl_w [5][i]  = adv_stage_fwd(5, fwd_cntrl_r [4][i]);
-        fwd_cntrl_w [6][i]  = adv_stage_fwd(6, fwd_cntrl_r [5][i]);
+        fwd_cntrl_w [4][i]  = stage_fwd_adv(
+                 (stall [4] ? fwd_cntrl_r [4][i] : fwd), .wrbk_en('b1));
+        fwd_cntrl_w [5][i]  = stage_fwd_adv(
+                 stall [5] ? fwd_cntrl_r [5][i] : fwd_cntrl_r [4][i]);
+        fwd_cntrl_w [6][i]  = stage_fwd_adv(
+                 stall [6] ? fwd_cntrl_r [6][i] : fwd_cntrl_r [5][i]);
 
-      end // for (int i = 0; i < 2; i++)
+      end // for (int i   = 0; i < 2; i++)
 
       fwd_cntrl_en [4]      = (adv [3] | vld_r [4]);
       fwd_cntrl_en [5]      = (adv [4] | vld_r [5]);

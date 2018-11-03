@@ -180,8 +180,8 @@ struct CombStallTb : libtb2::Top<uut_t> {
     dont_initialize();
 
     stall_n_ = 0;
-    //    SC_METHOD(m_stall);
-    //    sensitive << clk_.posedge_event();
+    SC_METHOD(m_stall);
+    sensitive << clk_.posedge_event();
 
     SC_THREAD(t_replay);
 
