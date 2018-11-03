@@ -418,22 +418,41 @@ module precompute (
   function stage_fwd_t stage_fwd_adv(stage_fwd_t in, bit wrbk_en = 'b0); begin
     logic [6:0]       wrbk_mask;
     logic [9:4][6:0]  in_adv;
-    
+
+    // Writeback forwarding is enabled only for stage 4. Beyond this,
+    // the bypass bit must be explicitly cleared post-advance to
+    // ensure that the default clause in the forwarding bitmap is set.
     //
     wrbk_mask            = '1;
     wrbk_mask [6]        = wrbk_en;
 
+    // Complicated: For each bit in the forwarding bitmap, compute
+    // whether each bit is to be advanced as a function of the
+    // pipeline stage (if a stage is stalled, the bit will remain in
+    // its prior location; if the stage advances, the bit is shifted
+    // towards the MSB by 1b).
+    //
+    // In the [6]-bit location (denoting writeback forwarding), gate
+    // this against ADV [3] as this is the actual location in the
+    // pipeline (there is no ADV[10]).
     //
     in_adv               = '0;
     for (int i = 4; i < 10; i++) begin
-      in_adv [i][i - 3]  = (i == 9 ? adv [3] : adv [i]) ? in [i - 4] : in [i - 3];
+      logic sel = (i == 9) ? adv [3] : adv [i];
+      
+      in_adv [i][i - 3]  = sel ? in [i - 4] : in [i - 3];
     end
 
+    // Derive the final forwarding bitmap by OR-ing all of the
+    // individually shifted bits and by applying the mask.
     //
     stage_fwd_adv.sel  = '0;
     for (int i = 4; i < 10; i++)
       stage_fwd_adv.sel |= (wrbk_mask & in_adv [i]);
 
+    // Finally, if no forwarding bits are set, set the default clause
+    // to select the current wdata value in the stages ucode.
+    //
     stage_fwd_adv.def    = (stage_fwd_adv.sel == '0);
   end endfunction
   
@@ -442,15 +461,19 @@ module precompute (
   always_comb
     begin : precompute_PROC
 
+      // Address comparators for the bypass network. All comparisons
+      // are performed at one fixed location in the pipeline and,
+      // unlike the more traditional forwarding scheme, are not
+      // redundantly recomputed in each pipeline stage.
+      //
       for (int i = 0; i < 2; i++) begin
-
         //
         reg_t ra  = ucode_r [3].inst.ra [i];
 
         for (int stg = 4; stg < 10; stg++)
           fwd_s3 [i][stg]  = vld_r [stg] & (ucode_r [stg].inst.wa == ra);
 
-      end
+      end // for (int i = 0; i < 2; i++)
 
       for (int i = 0; i < 2; i++) begin
         //
@@ -463,6 +486,12 @@ module precompute (
                                     fwd_s3 [i][5],
                                     fwd_s3 [i][4] });
 
+
+        // The forwarding bitmap is recomputed as the pipeline
+        // advances, even when the current stage associated with the
+        // bitmap is stalled. Ensure that when the stage is stalled,
+        // we pass the current state of the bitmap and not the 'next'
+        // state.
         //
         fwd_cntrl_w [4][i]  = stage_fwd_adv(
                  (stall [4] ? fwd_cntrl_r [4][i] : fwd), .wrbk_en('b1));
@@ -485,7 +514,10 @@ module precompute (
     begin : ucode_s4_PROC
 
       for (int i = 0; i < 2; i++) begin
-        
+    
+        // Unlike a traditional forwarding network, the forwarding
+        // network here is derived from registered values denoting the
+        // precomputed forwarding state.
         //
         fwd_s4_rdata [i]  =
                '0
@@ -494,7 +526,7 @@ module precompute (
              | (fwd_cntrl_r [4][i].sel [4] ? ucode_r [8].wdata : '0) // S8
              | (fwd_cntrl_r [4][i].sel [3] ? ucode_r [7].wdata : '0) // S7
              | (fwd_cntrl_r [4][i].sel [2] ? ucode_w [7].wdata : '0) // S6
-             | (fwd_cntrl_r [4][i].def     ? rf__rdata [i]     : '0) // X
+             | (fwd_cntrl_r [4][i].def     ? rf__rdata [i]     : '0) // DEF
            ;
 
       end // for (int i = 0; i < 2; i++)
@@ -519,7 +551,7 @@ module precompute (
              | (fwd_cntrl_r [5][i].sel [4] ? ucode_r [8].wdata     : '0) // S8
              | (fwd_cntrl_r [5][i].sel [3] ? ucode_r [7].wdata     : '0) // S7
              | (fwd_cntrl_r [5][i].sel [2] ? ucode_w [7].wdata     : '0) // S6
-             | (fwd_cntrl_r [5][i].def     ? ucode_r [5].rdata [i] : '0) // X
+             | (fwd_cntrl_r [5][i].def     ? ucode_r [5].rdata [i] : '0) // DEF
            ;
 
       end // for (int i = 0; i < 2; i++)
@@ -545,7 +577,7 @@ module precompute (
              | (fwd_cntrl_r [6][i].sel [5] ? ucode_r [9].wdata     : '0) // S9
              | (fwd_cntrl_r [6][i].sel [4] ? ucode_r [8].wdata     : '0) // S8
              | (fwd_cntrl_r [6][i].sel [3] ? ucode_r [7].wdata     : '0) // S7
-             | (fwd_cntrl_r [6][i].def     ? ucode_r [6].rdata [i] : '0) // X
+             | (fwd_cntrl_r [6][i].def     ? ucode_r [6].rdata [i] : '0) // DEF
            ;
         
       end // for (int i = 0; i < 2; i++)
