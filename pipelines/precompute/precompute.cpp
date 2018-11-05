@@ -171,7 +171,7 @@ struct CombStallTb : libtb2::Top<uut_t> {
     
     sampler_.clk(clk_);
 
-    generate_stimulus(1024 << 2);
+    generate_stimulus(1024);
 
     SC_THREAD(t_in);
     

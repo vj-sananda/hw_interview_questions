@@ -134,7 +134,23 @@ module tomasulo (
   //
   cdb_t                       cdb_w;
   cdb_t                       cdb_r;
+  //
+  logic [4:0]                 rr_req;
+  logic [4:0]                 rr_gnt;
+  logic                       rr_ack;
+  //
+  sch_t                       sch_r;
+  sch_t                       sch_w;
 
+  function sch_t sch_flag_set(sch_t in); begin
+    casez ({|rr_req[1:0], |rr_req[3:2], rr_req[4]})
+      3'b1??:  sch_flag_set = (1 << LATENCY_ARITH_N);
+      3'b01?:  sch_flag_set = (1 << LATENCY_LOGIC_N);
+      3'b001:  sch_flag_set = (1 << LATENCY_MPY_N);
+      default: sch_flag_set = '0;
+    endcase // casez ({|rr_req[1:0], |rr_req[3:2], rr_req[4]})
+  end endfunction
+  
   // ======================================================================== //
   //                                                                          //
   // Combinational Logic                                                      //
@@ -182,12 +198,24 @@ module tomasulo (
   always_comb
     begin : cdb_PROC
 
-      cdb_w  = '0;
-      cdb_w |= exe_arith_0_cdb_r;
-      cdb_w |= exe_arith_1_cdb_r;
-      cdb_w |= exe_logic_0_cdb_r;
-      cdb_w |= exe_logic_1_cdb_r;
-      cdb_w |= exe_mpy_cdb_r;
+      //
+      rr_ack      = (|rr_req);
+
+      //
+      casez ({|rr_req[1:0], |rr_req[3:2], rr_req[4]})
+        3'b1??:  sch_w = (sch_r | (1 << LATENCY_ARITH_N)) >> 1;
+        3'b01?:  sch_w = (sch_r | (1 << LATENCY_LOGIC_N)) >> 1;
+        3'b001:  sch_w = (sch_r | (1 << LATENCY_MPY_N)) >> 1;
+        default: sch_w = (sch_r >> 1);
+      endcase // casez ({|rr_req[1:0], |rr_req[3:2], rr_req[4]})
+
+      //
+      cdb_w       = '0;
+      cdb_w      |= exe_arith_0_cdb_r;
+      cdb_w      |= exe_arith_1_cdb_r;
+      cdb_w      |= exe_logic_0_cdb_r;
+      cdb_w      |= exe_logic_1_cdb_r;
+      cdb_w      |= exe_mpy_cdb_r;
 
     end // block: cdb_PROC
 
@@ -196,6 +224,14 @@ module tomasulo (
   // Flops                                                                    //
   //                                                                          //
   // ======================================================================== //
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      sch_r <= '0;
+    else
+      sch_r <= sch_w;
   
   // ------------------------------------------------------------------------ //
   //
@@ -281,12 +317,30 @@ module tomasulo (
 
   // ------------------------------------------------------------------------ //
   //
+  rr #(.W(5)) u_rr (
+    //
+      .clk               (clk                  )
+    , .rst               (rst                  )
+    //
+    , .req               (rr_req               )
+    , .ack               (rr_ack               )
+    //
+    , .gnt               (rr_gnt               )
+  );
+
+  // ------------------------------------------------------------------------ //
+  //
   tomasulo_rs u_tomasulo_rs_arith_0 (
     //
       .clk               (clk                  )
     , .rst               (rst                  )
     //
+    , .sch_r             (sch_r                )
+    //
     , .cdb_r             (cdb_r                )
+    //
+    , .cdb_gnt           (rr_gnt [0]           )
+    , .cdb_req           (rr_req [0]           )
     //
     , .full_r            (exe_arith_0_full_r   )
     //
@@ -317,9 +371,14 @@ module tomasulo (
       .clk               (clk                  )
     , .rst               (rst                  )
     //
-    , .full_r            (exe_arith_1_full_r   )
+    , .sch_r             (sch_r                )
     //
     , .cdb_r             (cdb_r                )
+    //
+    , .cdb_gnt           (rr_gnt [1]           )
+    , .cdb_req           (rr_req [1]           )
+    //
+    , .full_r            (exe_arith_1_full_r   )
     //
     , .dis_vld_r         (exe_arith_1_dis_vld_r)
     , .dis_r             (exe_dis_r            )
@@ -348,9 +407,14 @@ module tomasulo (
       .clk               (clk                  )
     , .rst               (rst                  )
     //
-    , .full_r            (exe_logic_0_full_r   )
+    , .sch_r             (sch_r                )
     //
     , .cdb_r             (cdb_r                )
+    //
+    , .cdb_gnt           (rr_gnt [2]           )
+    , .cdb_req           (rr_req [2]           )
+    //
+    , .full_r            (exe_logic_0_full_r   )
     //
     , .dis_vld_r         (exe_logic_0_dis_vld_r)
     , .dis_r             (exe_dis_r            )
@@ -379,9 +443,14 @@ module tomasulo (
       .clk               (clk                  )
     , .rst               (rst                  )
     //
-    , .full_r            (exe_logic_1_full_r   )
+    , .sch_r             (sch_r                )
     //
     , .cdb_r             (cdb_r                )
+    //
+    , .cdb_gnt           (rr_gnt [3]           )
+    , .cdb_req           (rr_req [3]           )
+    //
+    , .full_r            (exe_logic_1_full_r   )
     //
     , .dis_vld_r         (exe_logic_1_dis_vld_r)
     , .dis_r             (exe_dis_r            )
@@ -410,9 +479,14 @@ module tomasulo (
       .clk               (clk                )
     , .rst               (rst                )
     //
-    , .full_r            (exe_mpy_full_r     )
+    , .sch_r             (sch_r              )
     //
     , .cdb_r             (cdb_r              )
+    //
+    , .cdb_gnt           (rr_gnt [4]         )
+    , .cdb_req           (rr_req [4]         )
+    //
+    , .full_r            (exe_mpy_full_r     )
     //
     , .dis_vld_r         (exe_mpy_dis_vld_r  )
     , .dis_r             (exe_dis_r          )
