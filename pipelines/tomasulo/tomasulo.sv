@@ -193,10 +193,10 @@ module tomasulo (
       rr_ack      = (|rr_req);
 
       //
-      casez ({|rr_req[1:0], |rr_req[3:2], rr_req[4]})
-        3'b1??:  sch_w = (sch_r | (1 << LATENCY_ARITH_N)) >> 1;
-        3'b01?:  sch_w = (sch_r | (1 << LATENCY_LOGIC_N)) >> 1;
-        3'b001:  sch_w = (sch_r | (1 << LATENCY_MPY_N)) >> 1;
+      casez ({|rr_gnt[1:0], |rr_gnt[3:2], rr_gnt[4]})
+        3'b1??:  sch_w = (sch_r >> 1) | (1 << LATENCY_ARITH_N);
+        3'b01?:  sch_w = (sch_r >> 1) | (1 << LATENCY_LOGIC_N);
+        3'b001:  sch_w = (sch_r >> 1) | (1 << LATENCY_MPY_N);
         default: sch_w = (sch_r >> 1);
       endcase // casez ({|rr_req[1:0], |rr_req[3:2], rr_req[4]})
 

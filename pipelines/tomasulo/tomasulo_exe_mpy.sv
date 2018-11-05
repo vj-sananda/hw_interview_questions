@@ -25,6 +25,10 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
+`include "libtb2.vh"
+`include "libv2_pkg.vh"
+
+`include "tomasulo_pkg.vh"
 
 module tomasulo_exe_mpy #(parameter int LATENCY_N = 5)(
 
@@ -54,5 +58,79 @@ module tomasulo_exe_mpy #(parameter int LATENCY_N = 5)(
 
    , output tomasulo_pkg::cdb_t                   cdb_r
 );
+  import tomasulo_pkg::*;
+
+  //
+  logic [31:0]                          mpy__a;
+  logic [31:0]                          mpy__b;
+  logic                                 mpy__pass;
+  //
+  logic [1:0][31:0]                     mpy__y;
+  logic                                 mpy__y_vld_r;
+
+  //
+  tag_t                                 delay_pipe_in;
+  tag_t                                 delay_pipe_out_r;
+
+  // ======================================================================== //
+  //                                                                          //
+  // Sequential Logic                                                         //
+  //                                                                          //
+  // ======================================================================== //
+
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : cntrl_PROC
+
+      //
+      mpy__a         = '0;
+      mpy__b         = '0;
+      mpy__pass      = '0;
+
+      //
+      cdb_r          = '0;
+      cdb_r.vld      = mpy__y_vld_r;
+      cdb_r.wdata    = mpy__y [0];
+      cdb_r.tag      = delay_pipe_out_r;
+
+      //
+      delay_pipe_in  = iss.tag;
+
+    end
+  
+  // ======================================================================== //
+  //                                                                          //
+  // Instances                                                                //
+  //                                                                          //
+  // ======================================================================== //
+
+  // ------------------------------------------------------------------------ //
+  //
+  delay_pipe #(.W(TAG_W), .N(LATENCY_N)) u_delay_pipe (
+    //
+      .clk               (clk                )
+    , .rst               (rst                )
+    //
+    , .in                (delay_pipe_in      )
+    , .out_r             (delay_pipe_out_r   )
+  );
+  
+  // ------------------------------------------------------------------------ //
+  //
+  mlt5c #(.W(WORD_W)) u_mpy (
+    //
+      .clk               (clk                )
+    , .rst               (rst                )
+    //
+    , .a                 (mpy__a             )
+    , .b                 (mpy__b             )
+    , .pass              (mpy__pass          )
+    //
+    , .y                 (mpy__y             )
+    , .y_vld_r           (mpy__y_vld_r       )
+    //
+    , .busy_r            ()
+  );
 
 endmodule // tomasulo_exe_logic

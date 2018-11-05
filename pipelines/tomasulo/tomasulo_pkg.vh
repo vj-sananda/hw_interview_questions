@@ -41,6 +41,7 @@ package tomasulo_pkg;
   //
   typedef logic [4:0] reg_t;
   typedef logic [31:0] word_t;
+  localparam int WORD_W = $bits(word_t);
 
   //
   typedef enum logic [3:0] {   OP_NOP = 4'b0000
@@ -102,6 +103,7 @@ package tomasulo_pkg;
   localparam int FIFO_W  = (INST_W + IMM_W);
 
   typedef logic [4:0] tag_t;
+  localparam int      TAG_W  = $bits(tag_t);
 
   typedef struct packed {
     logic        vld;
@@ -135,6 +137,7 @@ package tomasulo_pkg;
     word_t [1:0] rdata;
     opcode_t     op;
     tag_t        tag;
+    imm_t        imm;
   } issue_t;
 
 endpackage // tomasulo_pkg

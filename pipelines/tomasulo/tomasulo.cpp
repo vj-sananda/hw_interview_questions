@@ -56,7 +56,8 @@ enum OP {
   OP_SUB = 6,
   OP_MOV0 = 7,
   OP_MOV1 = 8,
-  OP_MOVI = 9
+  OP_MOVI = 9,
+  OP_MPY = 10
 };
 
 template<>
@@ -71,6 +72,7 @@ struct scv_extensions<OP> : public scv_enum_base<OP> {
     SCV_ENUM(OP_MOV0);
     SCV_ENUM(OP_MOV1);
     SCV_ENUM(OP_MOVI);
+    SCV_ENUM(OP_MPY);
   }
 };
 
@@ -136,6 +138,9 @@ struct Machine {
     } break;
     case OP_MOVI: {
       r.d = i.imm;
+    } break;
+    case OP_MPY: {
+      r.d = reg[i.ra[0]] * reg[i.ra[1]];
     } break;
     }
 

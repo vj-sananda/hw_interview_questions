@@ -25,6 +25,11 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //========================================================================== //
 
+`include "libtb2.vh"
+`include "libv2_pkg.vh"
+
+`include "tomasulo_pkg.vh"
+
 module tomasulo_exe_logic #(parameter int LATENCY_N = 1) (
 
    //======================================================================== //
@@ -53,6 +58,102 @@ module tomasulo_exe_logic #(parameter int LATENCY_N = 1) (
 
    , output tomasulo_pkg::cdb_t                   cdb_r
 );
+  import tomasulo_pkg::*;
+
+  //
+  cdb_t                                 cdb_w;
+  logic                                 cdb_en;
+  //
+  cdb_t                                 delay_pipe_in;
+  cdb_t                                 delay_pipe_out_r;
+
+  //
+  cdb_t                                 cdb;
+  
+  //
+  function word_t exe(opcode_t op, word_t [1:0] r, imm_t imm); begin
+    exe  = '0;
+    case (op)
+      OP_AND: exe   = (r[0] & r[1]);
+      OP_NOT: exe   = ~r[0];
+      OP_OR:  exe   = (r[0] | r[1]);
+      OP_XOR: exe   = (r[0] ^ r[1]);
+      OP_MOV0: exe  = r[0];
+      OP_MOV1: exe  = r[1];
+      OP_MOVI: exe  = imm;
+      default: exe  = r[0];
+    endcase // case (op)
+  end endfunction
+
+  // ======================================================================== //
+  //                                                                          //
+  // Combinational Logic                                                      //
+  //                                                                          //
+  // ======================================================================== //
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : exe_PROC
+
+      //
+      cdb.vld    = iss_vld;
+      cdb.tag    = iss_vld ? iss.tag : '0;
+      cdb.wdata  = iss_vld ? exe(iss.op, iss.rdata, iss.imm) : '0;
+
+      if (LATENCY_N > 1) begin
+
+        //
+        delay_pipe_in  = cdb;
+
+        //
+        cdb_en         = (delay_pipe_out_r.vld | cdb_r.vld);
+        cdb_w          =  delay_pipe_out_r;
+
+      end else begin
+
+        //
+        cdb_en  = (iss_vld | cdb_r.vld);
+        cdb_w   = cdb;
+
+      end
+
+    end // block: exe_PROC
+
+  // ======================================================================== //
+  //                                                                          //
+  // Flops                                                                    //
+  //                                                                          //
+  // ======================================================================== //
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      cdb_r <= '0;
+    else if (cdb_en)
+      cdb_r <= cdb_w;
+
+  // ======================================================================== //
+  //                                                                          //
+  // Instances                                                                //
+  //                                                                          //
+  // ======================================================================== //
+
+  // ------------------------------------------------------------------------ //
+  //
+  generate if (LATENCY_N > 1) begin
+
+    delay_pipe #(.W(CDB_W), .N(LATENCY_N - 1)) u_delay_pipe (
+      //
+        .clk                  (clk                     )
+      , .rst                  (rst                     )
+      //
+      , .in                   (delay_pipe_in           )
+      , .out_r                (delay_pipe_out_r        )
+    );
+
+  end endgenerate
 
 endmodule // tomasulo_exe_logic
 

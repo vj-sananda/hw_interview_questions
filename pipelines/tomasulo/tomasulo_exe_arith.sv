@@ -149,6 +149,5 @@ module tomasulo_exe_arith #(parameter int LATENCY_N = 2) (
     );
 
   end endgenerate
-
   
 endmodule // tomasulo_exe_arith
