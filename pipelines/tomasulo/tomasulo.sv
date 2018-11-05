@@ -141,15 +141,6 @@ module tomasulo (
   //
   sch_t                       sch_r;
   sch_t                       sch_w;
-
-  function sch_t sch_flag_set(sch_t in); begin
-    casez ({|rr_req[1:0], |rr_req[3:2], rr_req[4]})
-      3'b1??:  sch_flag_set = (1 << LATENCY_ARITH_N);
-      3'b01?:  sch_flag_set = (1 << LATENCY_LOGIC_N);
-      3'b001:  sch_flag_set = (1 << LATENCY_MPY_N);
-      default: sch_flag_set = '0;
-    endcase // casez ({|rr_req[1:0], |rr_req[3:2], rr_req[4]})
-  end endfunction
   
   // ======================================================================== //
   //                                                                          //
