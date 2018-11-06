@@ -97,7 +97,7 @@ module tomasulo_exe_mpy #(parameter int LATENCY_N = 5)(
       //
       delay_pipe_in  = iss.tag;
 
-    end
+    end // block: cntrl_PROC
   
   // ======================================================================== //
   //                                                                          //

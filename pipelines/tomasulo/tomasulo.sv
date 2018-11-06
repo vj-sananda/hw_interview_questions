@@ -79,6 +79,7 @@ module tomasulo (
   inst_t [15:0]               fifo_inst_r;
   //
   inst_t                      inst;
+  logic                       inst_vld;
   logic                       inst_adv;
   //
   ptr_t                       wr_ptr_r;
@@ -103,7 +104,8 @@ module tomasulo (
   logic                       exe_logic_0_dis_vld_r;
   logic                       exe_logic_1_dis_vld_r;
   logic                       exe_mpy_dis_vld_r;
-  dispatch_t                  exe_dis_r;
+  logic [4:0]                 dis_vld_r;
+  dispatch_t                  dis_r;
   //
   logic                       exe_arith_0_full_r;
   logic                       exe_arith_1_full_r;
@@ -181,6 +183,7 @@ module tomasulo (
 
       //
       inst            = fifo_inst_r [rd_ptr_r.p];
+      inst_vld        = (~fifo_empty_r);
 
     end // block: front_end_PROC
 
@@ -296,14 +299,11 @@ module tomasulo (
     , .mpy_full_r        (exe_mpy_full_r          )
     //
     , .inst              (inst                    )
+    , .inst_vld          (inst_vld                )
     , .inst_adv          (inst_adv                )
     //
-    , .dis_r             (exe_dis_r               )
-    , .arith_0_dis_vld_r (exe_arith_0_dis_vld_r   )
-    , .arith_1_dis_vld_r (exe_arith_1_dis_vld_r   )
-    , .logic_0_dis_vld_r (exe_logic_0_dis_vld_r   )
-    , .logic_1_dis_vld_r (exe_logic_1_dis_vld_r   )
-    , .mpy_dis_vld_r     (exe_mpy_dis_vld_r       )
+    , .dis_r             (dis_r                   )
+    , .dis_vld_r         (dis_vld_r               )
   );
 
   // ------------------------------------------------------------------------ //
@@ -335,8 +335,8 @@ module tomasulo (
     //
     , .full_r            (exe_arith_0_full_r   )
     //
-    , .dis_vld_r         (exe_arith_0_dis_vld_r)
-    , .dis_r             (exe_dis_r            )
+    , .dis_vld_r         (dis_vld_r [0]        )
+    , .dis_r             (dis_r                )
     //
     , .iss_vld_r         (exe_arith_0_iss_vld  )
     , .iss_r             (exe_arith_0_iss      )
@@ -371,8 +371,8 @@ module tomasulo (
     //
     , .full_r            (exe_arith_1_full_r   )
     //
-    , .dis_vld_r         (exe_arith_1_dis_vld_r)
-    , .dis_r             (exe_dis_r            )
+    , .dis_vld_r         (dis_vld_r [1]        )
+    , .dis_r             (dis_r                )
     //
     , .iss_vld_r         (exe_arith_1_iss_vld  )
     , .iss_r             (exe_arith_1_iss      )
@@ -407,8 +407,8 @@ module tomasulo (
     //
     , .full_r            (exe_logic_0_full_r   )
     //
-    , .dis_vld_r         (exe_logic_0_dis_vld_r)
-    , .dis_r             (exe_dis_r            )
+    , .dis_vld_r         (dis_vld_r [2]        )
+    , .dis_r             (dis_r                )
     //
     , .iss_vld_r         (exe_logic_0_iss_vld  )
     , .iss_r             (exe_logic_0_iss      )
@@ -443,8 +443,8 @@ module tomasulo (
     //
     , .full_r            (exe_logic_1_full_r   )
     //
-    , .dis_vld_r         (exe_logic_1_dis_vld_r)
-    , .dis_r             (exe_dis_r            )
+    , .dis_vld_r         (dis_vld_r [3]        )
+    , .dis_r             (dis_r                )
     //
     , .iss_vld_r         (exe_logic_1_iss_vld  )
     , .iss_r             (exe_logic_0_iss      )
@@ -479,8 +479,8 @@ module tomasulo (
     //
     , .full_r            (exe_mpy_full_r     )
     //
-    , .dis_vld_r         (exe_mpy_dis_vld_r  )
-    , .dis_r             (exe_dis_r          )
+    , .dis_vld_r         (dis_vld_r [4]      )
+    , .dis_r             (dis_r              )
     //
     , .iss_vld_r         (exe_logic_1_mpy_vld)
     , .iss_r             (exe_logic_1_mpy    )

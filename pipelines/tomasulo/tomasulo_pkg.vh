@@ -35,6 +35,7 @@ package tomasulo_pkg;
   localparam int LATENCY_LOGIC_N  = 1;
   localparam int LATENCY_MPY_N  = 5;
   localparam int RS_N  = 4;
+  localparam int ROB_N  = 32;
 
   typedef logic [5:0] sch_t;
 
@@ -104,11 +105,17 @@ package tomasulo_pkg;
 
   typedef logic [4:0] tag_t;
   localparam int      TAG_W  = $bits(tag_t);
+  typedef logic [31:0] tag_d_t;
+  localparam int       TAG_D_W  = $bits(tag_d_t);
+
+  typedef logic [$clog2(ROB_N)-1:0] robid_t;
 
   typedef struct packed {
     logic        vld;
     tag_t        tag;
+    reg_t        wa;
     word_t       wdata;
+    robid_t      robid;
   } cdb_t;
   localparam int CDB_W  = $bits(cdb_t);
 
@@ -129,7 +136,7 @@ package tomasulo_pkg;
     opcode_t       op;
     tag_t          tag;
     oprand_t [1:0] oprand;
-    logic          f;
+    robid_t        robid;
   } dispatch_t;
   localparam int DISPATCH_W  = $bits(dispatch_t);
 
