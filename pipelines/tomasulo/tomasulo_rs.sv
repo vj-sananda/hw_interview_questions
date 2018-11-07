@@ -126,13 +126,8 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
   logic                            full_w;
   //
   n_d_t                            rdy_sel;
-  n_t                              rdy_idx;
-  //
   n_d_t                            vld_sel;
-  n_t                              vld_idx;
-  //
   n_d_t                            nvld_sel;
-  n_t                              nvld_idx;
   //
   n_d_t                            cdb_req_n;
   //
@@ -158,13 +153,26 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
   end endfunction
 
   //
-  function n_t encode(n_d_t in); begin
-    encode  = '0;
-    for (int i = $bits(n_d_t) - 1; i >= 0; i--)
-      if (in [i])
-        encode  = n_t'(i);
+  function rs_entry_t to_rs_entry(dispatch_t d); begin
+    to_rs_entry         = '0;
+    to_rs_entry.opcode  = dis_r.opcode;
+    to_rs_entry.oprand  = dis_r.oprand;
+    to_rs_entry.tag     = dis_r.tag;
+    to_rs_entry.robid   = dis_r.robid;
+    to_rs_entry.imm     = dis_r.imm;
   end endfunction
-  
+
+  //
+  function issue_t to_issue(rs_entry_t rs); begin
+    to_issue            = '0;
+    to_issue.rdata [0]  = rs.oprand [0].u.w;
+    to_issue.rdata [1]  = rs.oprand [1].u.w;
+    to_issue.op         = rs.opcode;
+    to_issue.tag        = rs.tag;
+    to_issue.imm        = rs.imm;
+    to_issue.robid      = rs.robid;
+  end endfunction
+
   // ------------------------------------------------------------------------ //
   //
   always_comb
@@ -172,18 +180,15 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
 
       //
       rdy_sel   = ffs(rs_rdy_r);
-      rdy_idx   = encode(rdy_sel);
 
       //
       vld_sel   = ffs(rs_vld_r);
-      vld_idx   = encode(vld_sel);
 
       //
       nvld_sel  = ffs(~rs_vld_r);
-      nvld_idx  = encode(nvld_sel);
-      
+
     end // block: sel_PROC
-  
+
   // ------------------------------------------------------------------------ //
   //
   always_comb
@@ -191,7 +196,6 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
 
       //
       rs_vld_set   = '0;
-      rs_vld_clr   = '0;
 
       //
       cdb_req_n    = '0;
@@ -206,48 +210,42 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
 
       //
       for (int i = 0; i < N; i++) begin
-        logic [1:0] capture_cdb;
-
-        //
-        rs_entry_t rs  = rs_entry_r [i];
-
-        for (int oprnd = 0; oprnd < 2; oprnd++) begin
-          oprand_t o           = rs.oprand [oprnd];
-
-          capture_cdb [oprnd]  = cdb_r.vld & o.busy & (o.u.t.tag == cdb_r.tag);
-        end
 
         //
         rs_entry_w [i]   = rs_entry_r [i];
         rs_entry_en [i]  = 'b0;
 
         //
-        casez ({rs_vld_r [i], rs_rdy_r [i], dis_vld_r, nvld_sel[i], cdb_r.vld, rdy_sel [i]})
+        casez ({rs_vld_r [i], nvld_sel[i], dis_vld_r, cdb_r.vld, rs_rdy_r [i], rdy_sel [i]})
 
           // Current RS-entry is inactive and is selected for allocation to
           // incoming dispatched instruction.
           //
-          6'b0011??: begin
-            rs_vld_set [i]         = 'b1;
-            
+          6'b01_1?_??: begin
+            rs_vld_set [i]   = 'b1;
+
             //
-            rs_entry_en [i]        = 'b1;
-            rs_entry_w [i].opcode  = dis_r.opcode;
-            rs_entry_w [i].oprand  = dis_r.oprand;
-            rs_entry_w [i].tag     = dis_r.tag;
-            rs_entry_w [i].robid   = dis_r.robid;
-            rs_entry_w [i].imm     = dis_r.imm;
-          end // case: 5'b0011?
+            rs_entry_en [i]  = 'b1;
+            rs_entry_w [i]   = to_rs_entry(dis_r);
+          end
 
           // Current RS-entry is active, but not ready. Snoop inbound
           // traffic on CDB for writes to the same tag as those busy
           // oprands in the station.
           //
-          6'b10??1?: begin
-            rs_entry_en [i]  = (|capture_cdb);
+          6'b1?_?1_0?: begin
 
+            //
             for (int o = 0; o < 2; o++) begin
-              if (capture_cdb [o]) begin
+              logic capture_cdb;
+              oprand_t oprnd;
+
+              oprnd        = rs_entry_r [i].oprand [o];
+              capture_cdb  = cdb_r.vld & oprnd.busy & (oprnd.u.t.tag == cdb_r.tag);
+
+              if (capture_cdb) begin
+                rs_entry_en [i]                 = 'b1;
+
                 rs_entry_w [i].oprand [o].busy  = 'b0;
                 rs_entry_w [i].oprand [o].u.w   = cdb_r.wdata;
               end
@@ -258,71 +256,74 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
             //
             rs_rdy_set [i]  = ~(rs_entry_w [i].oprand [0].busy |
                                 rs_entry_w [i].oprand [1].busy);
-          end // case: 5'b10??1
+          end
 
           // The current station entry is valid, ready and is
           // scheduled for issue.
           //
-          6'b1_1_?_?_?_1: begin
-            cdb_req_n [i]   = (~sch_r [LATENCY_N]);
-
-            if (cdb_gnt) begin
-              rs_vld_clr [i]     = cdb_gnt;
-
-              iss_vld_d_w [i]    = 'b1;
-              for (int o = 0; o < 2; o++)
-                iss_d_w [i].rdata [o]  = rs_entry_r [i].oprand [o].u.w;
-              iss_d_w [i].op           = rs_entry_r [i].opcode;
-              iss_d_w [i].tag          = rs_entry_r [i].tag;
-              iss_d_w [i].imm          = rs_entry_r [i].imm;
-              iss_d_w [i].robid        = rs_entry_r [i].robid;
-            end
-            
-          end // case: 6'b1_1_?_?_?_1
+          6'b1?_??_11: cdb_req_n [i]  = (~sch_r [LATENCY_N]);
 
           default:;
-          
+
         endcase // casez ({rs_vld_r [i]})
 
       end // for (int i = 0; i < N; i++)
 
-      //
-      rs_vld_w   = rs_vld_set | rs_vld_r & (~rs_vld_clr);
-      rs_vld_en  = |{rs_vld_set, rs_vld_clr};
-
-      //
-      cdb_req    = (|cdb_req_n);
-
-      //
-      rs_rdy_w   = rs_rdy_set | rs_rdy_r & (~rs_rdy_clr);
-      rs_rdy_en  = |{rs_rdy_set, rs_rdy_clr};
-
-      //
-      full_w     = (rs_vld_w == '1);
-
-      //
-      iss_vld_w  = (|iss_vld_d_w);
-
-      //
-      iss_w      = '0;
-      for (int i = 0; i < N; i++)
-        iss_w |= iss_d_w [i];
-      
     end // block: rs_dispatch_PROC
-  
+
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : rs_orr_PROC
+
+      //
+      cdb_req      = (|cdb_req_n);
+
+      //
+      iss_vld_d_w  = cdb_gnt ? cdb_req_n : '0;
+      iss_vld_w    = (|iss_vld_d_w);
+
+      //
+      iss_d_w      = '0;
+      for (int i = 0; i < N; i++) begin
+        if (iss_vld_d_w [i])
+          iss_d_w [i]  = to_issue(rs_entry_r [i]);
+      end // for (int i = 0; i < N; i++)
+
+      //
+      iss_w            = '0;
+      for (int i = 0; i < N; i++)
+        iss_w    |= iss_d_w [i];
+
+      //
+      rs_vld_clr  = iss_vld_d_w;
+
+      //
+      rs_vld_w    = rs_vld_set | rs_vld_r & (~rs_vld_clr);
+      rs_vld_en   = |{rs_vld_set, rs_vld_clr};
+
+      //
+      full_w      = (rs_vld_w == '1);
+
+      //
+      rs_rdy_w    = rs_rdy_set | rs_rdy_r & (~rs_rdy_clr);
+      rs_rdy_en   = |{rs_rdy_set, rs_rdy_clr};
+
+    end // block: rs_orr_PROC
+
   // ======================================================================== //
   //                                                                          //
   // Flops                                                                    //
   //                                                                          //
   // ======================================================================== //
-  
+
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
     for (int i = 0; i < N; i++)
       if (rs_entry_en [i])
         rs_entry_r [i] <= rs_entry_w [i];
-  
+
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
@@ -330,7 +331,7 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
       rs_vld_r <= '0;
     else if (rs_vld_en)
       rs_vld_r <= rs_vld_w;
-      
+
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
@@ -338,7 +339,7 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
       rs_rdy_r <= '0;
     else if (rs_rdy_en)
       rs_rdy_r <= rs_rdy_w;
-  
+
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
@@ -354,13 +355,11 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
       iss_vld_r <= 'b0;
     else
       iss_vld_r <= iss_vld_w;
-  
+
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
     if (iss_vld_w)
       iss_r <= iss_w;
-  
-endmodule // tomasulo_rs
 
-  
+endmodule // tomasulo_rs
