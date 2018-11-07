@@ -69,7 +69,7 @@ module tomasulo_dispatcher (
    //======================================================================== //
 
    //
-   , input tomasulo_pkg::inst_t                   inst
+   , input tomasulo_pkg::fifo_inst_t              inst
    , input                                        inst_vld
    //
    , output logic                                 inst_adv
@@ -81,11 +81,7 @@ module tomasulo_dispatcher (
    //======================================================================== //
 
    //
-   , input                                        arith_0_full_r
-   , input                                        arith_1_full_r
-   , input                                        logic_0_full_r
-   , input                                        logic_1_full_r
-   , input                                        mpy_full_r
+   , input [4:0]                                  rs_full_r
    //
    , output tomasulo_pkg::dispatch_t              dis_r
    , output [4:0]                                 dis_vld_r
@@ -170,68 +166,97 @@ module tomasulo_dispatcher (
         clz  = tag_t'(i);
   end endfunction
 
+  //
+  function oprand_t compute_oprand(int i); begin
+    logic bypass_cdb;
+    
+    //
+    bypass_cdb          = cdb_r.vld & (inst.ra [i] == cdb_r.wa);
+
+    //
+    compute_oprand [i]  = '0;
+    casez ({reg_busy_r [inst.ra [i]], bypass_cdb})
+      2'b1_0: begin
+        dis_w.oprand [i].busy     = 'b1;
+        dis_w.oprand [i].u.t.tag  = rf_tag__rdata [i];
+      end
+      2'b1_1: dis_w.oprand [i].u.w  = cdb_r.wdata;
+      2'b0_?: dis_w.oprand [i].u.w  = rf_reg__rdata [i];
+    endcase // casez ({compute_oprand [i].busy, bypass_cdb})
+
+  end endfunction
+
+  //
+  function logic [4:0] update_dis_vld_w; begin
+    logic [4:0] ret   = '0;
+
+    //
+    unique0 casez ({//
+                    inst_vld, flm__busy_r, rob__full_r,
+                    //
+                    is_arith(inst.op), rs_full_r [1:0],
+                    //
+                    is_logic(inst.op), rs_full_r [3:2],
+                    //
+                    is_mpy(inst.op), rs_full_r [4]
+                    })
+      //
+      11'b100_10?_???_??: ret [0]  = 'b1;
+      11'b100_110_???_??: ret [1]  = 'b1;
+
+      //
+      11'b100_0??_10?_??: ret [2]  = 'b1;
+      11'b100_0??_110_??: ret [3]  = 'b1;
+
+      //
+      11'b100_0??_0??_10: ret [4]  = 'b1;
+      default:            ret      = '0;
+    endcase // unique0 casez ({inst_vld, flm__busy_r...
+
+    //
+    update_dis_vld_w  = ret;
+
+  end endfunction
+
   // ------------------------------------------------------------------------ //
+
+  // Each instruction dispatch is annotated with an additional ID
+  // denoting a position in the commit reorder buffer. This buffer,
+  // which is not found in the original Tomasulo paper, plays no
+  // functional role in the algorithm and is instead used to recover
+  // the original instruction ordering before it is passed to the DV
+  // environment.
   //
   always_comb
     begin : dispatch_PROC
 
-      oprand_t [1:0] oprand;
+      //
+      dis_vld_w         = update_dis_vld_w();
+      dis_emit          = (|dis_vld_w);
 
       //
-      dis_vld_w          = '0;
+      rf_reg__ren       = {2{dis_emit}};
+      rf_reg__ra        = inst.ra;
 
       //
-      unique0 casez ({inst_vld, flm__busy_r,
-                      is_arith(inst.op), arith_0_full_r, arith_1_full_r,
-                      is_logic(inst.op), logic_0_full_r, logic_1_full_r,
-                      is_mpy(inst.op), mpy_full_r
-                      })
-
-        //
-        10'b10_10?_???_??: dis_vld_w [0]  = 'b1;
-        10'b10_110_???_??: dis_vld_w [1]  = 'b1;
-
-        //
-        10'b10_0??_10?_??: dis_vld_w [2]  = 'b1;
-        10'b10_0??_110_??: dis_vld_w [3]  = 'b1;
-
-        //
-        10'b10_0??_0??_10: dis_vld_w [4]  = 'b1;
-        default:           dis_vld_w      = '0;
-      endcase // unique0 casez ({inst_vld, flm__busy_r...
+      rf_tag__ren       = {2{dis_emit}};
+      rf_tag__ra        = inst.ra;
 
       //
-      dis_emit         = (|dis_vld_w);
+      flm__alloc_vld    = dis_emit;
+      flm__alloc_id     = clz(flm__state_r);
 
       //
-      rf_reg__ren      = {2{dis_emit}};
-      rf_reg__ra       = inst.ra;
-
-      //
-      rf_tag__ren      = {2{dis_emit}};
-      rf_tag__ra       = inst.ra;
-
-      //
-      oprand [0]       = '0;
-      oprand [0].busy  = reg_busy_r [inst.ra [0]];
-      if (oprand [0].busy)
-        oprand [0].u.t.tag  = rf_tag__rdata [0];
-      else
-        oprand [0].u.w  = rf_reg__rdata [0];
-
-      //
-      oprand [1]        = '0;
-      oprand [1].busy   = reg_busy_r [inst.ra [1]];
-      if (oprand [1].busy)
-        oprand [1].u.t.tag  = rf_tag__rdata [1];
-      else
-        oprand [1].u.w  = rf_reg__rdata [1];
+      rob__alloc_vld    = dis_emit;
 
       //
       dis_w             = '0;
-      dis_w.op          = inst.op;
-      dis_w.tag         = clz(flm__state_r);
-      dis_w.oprand      = oprand;
+      dis_w.opcode      = inst.op;
+      dis_w.tag         = flm__alloc_id;
+      dis_w.robid       = rob__alloc_id;
+      dis_w.oprand [0]  = compute_oprand(0);
+      dis_w.oprand [1]  = compute_oprand(1);
+      dis_w.imm         = inst.imm;
 
       //
       rf_tag__wen       = dis_emit;
@@ -246,12 +271,16 @@ module tomasulo_dispatcher (
     begin : reg_busy_PROC
 
       //
-      reg_busy_w   =    (reg_busy_r & ~(cdb_r.vld ? ('b1 << cdb_r.wa) : 'b0))
-                      | (dis_emit ? ('b1 << inst.wa) : '0)
-                   ;
+      reg_busy_w  = reg_busy_r;
 
       //
-      reg_busy_en  = (dis_emit | cdb_r.vld);
+      if (cdb_r.vld)
+        reg_busy_w [cdb_r.wa]  = 'b0;
+      if (dis_emit)
+        reg_busy_w [inst.wa]  = 'b1;
+
+      //
+      reg_busy_en             = (dis_emit | cdb_r.vld);
       
     end // block: reg_busy_PROC
   
@@ -261,18 +290,18 @@ module tomasulo_dispatcher (
     begin : completion_PROC
 
       //
-      rf_reg__wen    = cdb_r.vld;
-      rf_reg__wa     = cdb_r.wa;
-      rf_reg__wdata  = cdb_r.wdata;
+      rf_reg__wen     = cdb_r.vld;
+      rf_reg__wa      = cdb_r.wa;
+      rf_reg__wdata   = cdb_r.wdata;
 
       //
-      flm__free_vld  = cdb_r.vld;
-      flm__free_id   = cdb_r.tag;
+      flm__free_vld   = cdb_r.vld;
+      flm__free_id    = cdb_r.tag;
 
       //
-      rob__cmpl_vld      = cdb_r.vld;
-      rob__cmpl_id       = cdb_r.robid;
-      rob__cmpl_data     = '{wa:cdb_r.wa, wdata:cdb_r.wdata};
+      rob__cmpl_vld   = cdb_r.vld;
+      rob__cmpl_id    = cdb_r.robid;
+      rob__cmpl_data  = '{wa:cdb_r.wa, wdata:cdb_r.wdata};
       
     end // block: completion_PROC
   

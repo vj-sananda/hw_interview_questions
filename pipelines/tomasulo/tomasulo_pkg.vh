@@ -99,7 +99,16 @@ package tomasulo_pkg;
 
   //
   typedef logic [31:0] imm_t;
-  localparam int IMM_W  = $bits(imm_t);
+  localparam int       IMM_W  = $bits(imm_t);
+
+  //
+  typedef struct packed {
+    reg_t [1:0]     ra;
+    reg_t           wa;
+    opcode_t        op;
+    imm_t           imm;
+  } fifo_inst_t;
+  localparam int FIFO_INST_W  = $bits(fifo_inst_t);
 
   localparam int FIFO_W  = (INST_W + IMM_W);
 
@@ -133,10 +142,11 @@ package tomasulo_pkg;
   } oprand_t;
   
   typedef struct packed {
-    opcode_t       op;
+    opcode_t       opcode;
     tag_t          tag;
     oprand_t [1:0] oprand;
     robid_t        robid;
+    imm_t          imm;
   } dispatch_t;
   localparam int DISPATCH_W  = $bits(dispatch_t);
 
@@ -145,6 +155,7 @@ package tomasulo_pkg;
     opcode_t     op;
     tag_t        tag;
     imm_t        imm;
+    robid_t      robid;
   } issue_t;
 
 endpackage // tomasulo_pkg
