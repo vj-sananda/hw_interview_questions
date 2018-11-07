@@ -216,7 +216,14 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
         rs_entry_en [i]  = 'b0;
 
         //
-        casez ({rs_vld_r [i], nvld_sel[i], dis_vld_r, cdb_r.vld, rs_rdy_r [i], rdy_sel [i]})
+        casez ({//
+                rs_vld_r [i], nvld_sel[i],
+
+                //
+                dis_vld_r, cdb_r.vld,
+
+                //
+                rs_rdy_r [i], rdy_sel [i]})
 
           // Current RS-entry is inactive and is selected for allocation to
           // incoming dispatched instruction.
@@ -241,7 +248,8 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
               oprand_t oprnd;
 
               oprnd        = rs_entry_r [i].oprand [o];
-              capture_cdb  = cdb_r.vld & oprnd.busy & (oprnd.u.t.tag == cdb_r.tag);
+              capture_cdb  = cdb_r.vld & oprnd.busy &
+                             (oprnd.u.t.tag == cdb_r.tag);
 
               if (capture_cdb) begin
                 rs_entry_en [i]                 = 'b1;
@@ -288,10 +296,10 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
       for (int i = 0; i < N; i++) begin
         if (iss_vld_d_w [i])
           iss_d_w [i]  = to_issue(rs_entry_r [i]);
-      end // for (int i = 0; i < N; i++)
+      end
 
       //
-      iss_w            = '0;
+      iss_w  = '0;
       for (int i = 0; i < N; i++)
         iss_w    |= iss_d_w [i];
 
