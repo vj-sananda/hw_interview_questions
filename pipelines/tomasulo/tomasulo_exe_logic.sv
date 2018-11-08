@@ -100,6 +100,7 @@ module tomasulo_exe_logic #(parameter int LATENCY_N = 1) (
       cdb.vld    = iss_vld;
       cdb.tag    = iss_vld ? iss.tag : '0;
       cdb.wdata  = iss_vld ? exe(iss.op, iss.rdata, iss.imm) : '0;
+      cdb.robid  = iss.robid;
 
       if (LATENCY_N > 1) begin
 

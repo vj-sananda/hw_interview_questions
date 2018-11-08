@@ -89,13 +89,6 @@ module tomasulo_dispatcher (
   import tomasulo_pkg::*;
 
   //
-  typedef struct packed {
-    reg_t          wa;
-    word_t         wdata;
-  } out_t;
-  localparam int OUT_W  = $bits(out_t);
-
-  //
   logic [31:0]                          reg_busy_r;
   logic [31:0]                          reg_busy_w;
   logic                                 reg_busy_en;
@@ -130,17 +123,17 @@ module tomasulo_dispatcher (
   tag_t                                 rf_tag__wdata;
   //
   logic                                 rob__alloc_vld;
-  out_t                                 rob__alloc_data;
+  reg_t                                 rob__alloc_data;
   logic                                 rob__alloc_rdy;
   robid_t                               rob__alloc_id;
   //
   logic                                 rob__cmpl_vld;
   robid_t                               rob__cmpl_id;
-  out_t                                 rob__cmpl_data;
+  word_t                                rob__cmpl_data;
   //
   logic                                 rob__retire_rdy;
-  out_t                                 rob__retire_cmpl_data;
-  out_t                                 rob__retire_alloc_data;
+  word_t                                rob__retire_cmpl_data;
+  reg_t                                 rob__retire_alloc_data;
   logic                                 rob__retire_vld;
   //
   logic                                 rob__clear;
@@ -159,11 +152,11 @@ module tomasulo_dispatcher (
 
   // ------------------------------------------------------------------------ //
   //
-  function tag_t clz (tag_d_t in); begin
-    clz = '0;
+  function tag_t ffs (tag_d_t in); begin
+    ffs = '0;
     for (int i = $bits(tag_d_t) - 1; i >= 0; i--)
       if (in [i])
-        clz  = tag_t'(i);
+        ffs  = tag_t'(i);
   end endfunction
 
   //
@@ -171,17 +164,18 @@ module tomasulo_dispatcher (
     logic bypass_cdb;
     
     //
-    bypass_cdb          = cdb_r.vld & (inst.ra [i] == cdb_r.wa);
+    bypass_cdb      = cdb_r.vld & (inst.ra [i] == cdb_r.wa);
 
     //
-    compute_oprand [i]  = '0;
-    casez ({reg_busy_r [inst.ra [i]], bypass_cdb})
-      2'b1_0: begin
-        dis_w.oprand [i].busy     = 'b1;
-        dis_w.oprand [i].u.t.tag  = rf_tag__rdata [i];
+    compute_oprand  = '0;
+    casez ({reg_busy_r [inst.ra [i]], bypass_cdb, has_oprand(inst.op)})
+      3'b1_00: begin
+        compute_oprand.busy     = 'b1;
+        compute_oprand.u.t.tag  = rf_tag__rdata [i];
       end
-      2'b1_1: dis_w.oprand [i].u.w  = cdb_r.wdata;
-      2'b0_?: dis_w.oprand [i].u.w  = rf_reg__rdata [i];
+      3'b1_10: compute_oprand.u.w  = cdb_r.wdata;
+      3'b0_?0: compute_oprand.u.w  = rf_reg__rdata [i];
+      default: ;
     endcase // casez ({compute_oprand [i].busy, bypass_cdb})
 
   end endfunction
@@ -201,12 +195,12 @@ module tomasulo_dispatcher (
                     is_mpy(inst.op), rs_full_r [4]
                     })
       //
-      11'b100_10?_???_??: ret [0]  = 'b1;
-      11'b100_110_???_??: ret [1]  = 'b1;
+      11'b100_1?0_???_??: ret [0]  = 'b1;
+      11'b100_101_???_??: ret [1]  = 'b1;
 
       //
-      11'b100_0??_10?_??: ret [2]  = 'b1;
-      11'b100_0??_110_??: ret [3]  = 'b1;
+      11'b100_0??_1?0_??: ret [2]  = 'b1;
+      11'b100_0??_101_??: ret [3]  = 'b1;
 
       //
       11'b100_0??_0??_10: ret [4]  = 'b1;
@@ -228,26 +222,40 @@ module tomasulo_dispatcher (
   // environment.
   //
   always_comb
+    begin : lookup_PROC
+
+      //
+      dis_vld_w        = update_dis_vld_w();
+      dis_emit         = (|dis_vld_w);
+
+      //
+      inst_adv         = dis_emit;
+
+      //
+      rf_reg__ren      = {2{dis_emit}};
+      rf_reg__ra       = inst.ra;
+
+      //
+      rf_tag__ren      = {2{dis_emit}};
+      rf_tag__ra       = inst.ra;
+
+      //
+      flm__alloc_vld   = dis_emit;
+      flm__alloc_id    = ffs(~flm__state_r);
+
+      //
+      rob__alloc_vld   = dis_emit;
+      rob__alloc_data  = inst.wa;
+
+    end // block: lookup_PROC
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
     begin : dispatch_PROC
 
       //
-      dis_vld_w         = update_dis_vld_w();
-      dis_emit          = (|dis_vld_w);
-
-      //
-      rf_reg__ren       = {2{dis_emit}};
-      rf_reg__ra        = inst.ra;
-
-      //
-      rf_tag__ren       = {2{dis_emit}};
-      rf_tag__ra        = inst.ra;
-
-      //
-      flm__alloc_vld    = dis_emit;
-      flm__alloc_id     = clz(flm__state_r);
-
-      //
-      rob__alloc_vld    = dis_emit;
+      dis_en            = dis_emit;
 
       //
       dis_w             = '0;
@@ -301,7 +309,7 @@ module tomasulo_dispatcher (
       //
       rob__cmpl_vld   = cdb_r.vld;
       rob__cmpl_id    = cdb_r.robid;
-      rob__cmpl_data  = '{wa:cdb_r.wa, wdata:cdb_r.wdata};
+      rob__cmpl_data  = cdb_r.wdata;
       
     end // block: completion_PROC
   
@@ -312,8 +320,8 @@ module tomasulo_dispatcher (
 
       //
       out_vld_w        = rob__retire_vld;
-      out_wa_w         = rob__retire_cmpl_data.wa;
-      out_wdata_w      = rob__retire_cmpl_data.wdata;
+      out_wa_w         = rob__retire_alloc_data;
+      out_wdata_w      = rob__retire_cmpl_data;
 
       //
       rob__retire_rdy  = 'b1;
@@ -426,7 +434,7 @@ module tomasulo_dispatcher (
 
   // ------------------------------------------------------------------------ //
   //
-  rob #(.W(OUT_W), .N(ROB_N)) u_rob (
+  rob #(.CMPL_W(WORD_W), .ALLOC_W(REG_W), .N(ROB_N)) u_rob (
     //
       .clk               (clk                )
     , .rst               (rst                )

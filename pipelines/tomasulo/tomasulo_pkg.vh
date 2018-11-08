@@ -41,6 +41,7 @@ package tomasulo_pkg;
 
   //
   typedef logic [4:0] reg_t;
+  localparam int REG_W  = $bits(reg_t);
   typedef logic [31:0] word_t;
   localparam int WORD_W = $bits(word_t);
 
@@ -100,6 +101,11 @@ package tomasulo_pkg;
   //
   typedef logic [31:0] imm_t;
   localparam int       IMM_W  = $bits(imm_t);
+
+  //
+  function logic has_oprand(opcode_t op); begin
+    return (op == OP_MOVI);
+  end endfunction
 
   //
   typedef struct packed {

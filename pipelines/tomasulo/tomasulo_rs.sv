@@ -106,10 +106,12 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
 
   //
   rs_entry_t [N - 1:0]             rs_entry_r;
+  rs_entry_t [N - 1:0]             rs_entry_upt;
   rs_entry_t [N - 1:0]             rs_entry_w;
   logic      [N - 1:0]             rs_entry_en;
   //
   n_d_t                            rs_vld_r;
+  n_d_t                            rs_vld_upt;
   n_d_t                            rs_vld_w;
   logic                            rs_vld_en;
   //
@@ -117,6 +119,7 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
   n_d_t                            rs_vld_clr;
   //
   n_d_t                            rs_rdy_r;
+  n_d_t                            rs_rdy_upt;
   n_d_t                            rs_rdy_w;
   logic                            rs_rdy_en;
   //
@@ -179,10 +182,10 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
     begin : sel_PROC
 
       //
-      rdy_sel   = ffs(rs_rdy_r);
+      rdy_sel   = ffs( rs_rdy_r);
 
       //
-      vld_sel   = ffs(rs_vld_r);
+      vld_sel   = ffs( rs_vld_r);
 
       //
       nvld_sel  = ffs(~rs_vld_r);
@@ -202,7 +205,6 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
 
       //
       rs_rdy_set   = '0;
-      rs_rdy_clr   = '0;
 
       //
       iss_vld_d_w  = '0;
@@ -212,8 +214,8 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
       for (int i = 0; i < N; i++) begin
 
         //
-        rs_entry_w [i]   = rs_entry_r [i];
-        rs_entry_en [i]  = 'b0;
+        rs_entry_upt [i]  = rs_entry_r [i];
+        rs_entry_en [i]   = 'b0;
 
         //
         casez ({//
@@ -229,11 +231,11 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
           // incoming dispatched instruction.
           //
           6'b01_1?_??: begin
-            rs_vld_set [i]   = 'b1;
+            rs_vld_set [i]    = 'b1;
 
             //
-            rs_entry_en [i]  = 'b1;
-            rs_entry_w [i]   = to_rs_entry(dis_r);
+            rs_entry_en [i]   = 'b1;
+            rs_entry_upt [i]  = to_rs_entry(dis_r);
           end
 
           // Current RS-entry is active, but not ready. Snoop inbound
@@ -252,18 +254,12 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
                              (oprnd.u.t.tag == cdb_r.tag);
 
               if (capture_cdb) begin
-                rs_entry_en [i]                 = 'b1;
+                rs_entry_en [i]                   = 'b1;
 
-                rs_entry_w [i].oprand [o].busy  = 'b0;
-                rs_entry_w [i].oprand [o].u.w   = cdb_r.wdata;
+                rs_entry_upt [i].oprand [o].busy  = 'b0;
+                rs_entry_upt [i].oprand [o].u.w   = cdb_r.wdata;
               end
             end
-
-            // If neither busy bits are set at the end of this round,
-            // the station entry becomes ready for issue.
-            //
-            rs_rdy_set [i]  = ~(rs_entry_w [i].oprand [0].busy |
-                                rs_entry_w [i].oprand [1].busy);
           end
 
           // The current station entry is valid, ready and is
@@ -275,9 +271,39 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
 
         endcase // casez ({rs_vld_r [i]})
 
+        if (rs_entry_en [i])
+          // If neither busy bits are set at the end of this round,
+          // the station entry becomes ready for issue.
+          //
+          rs_rdy_set [i]   = ~(rs_entry_upt [i].oprand [0].busy |
+                               rs_entry_upt [i].oprand [1].busy);
+
       end // for (int i = 0; i < N; i++)
 
     end // block: rs_dispatch_PROC
+
+  // ------------------------------------------------------------------------ //
+  //
+  function n_d_t mask_msb (n_d_t in); begin
+    mask_msb    = in;
+    for (int i = 1; i < $bits(n_d_t); i++)
+      mask_msb [i] |= mask_msb [i - 1];
+  end endfunction
+
+  always_comb
+    begin : aging_PROC
+
+      n_d_t do_shift  = '0;
+//      n_d_t do_shift  = mask_msb(iss_vld_d_w);
+
+      for (int i = 0; i < N; i++) begin
+        //
+        rs_vld_w [i]    = do_shift [i] ? rs_vld_upt [i + 1] : rs_vld_upt [i];
+        rs_rdy_w [i]    = do_shift [i] ? rs_rdy_upt [i + 1] : rs_rdy_upt [i];
+        rs_entry_w [i]  = do_shift [i] ? rs_entry_upt [i + 1] : rs_entry_upt [i];
+      end
+
+    end
 
   // ------------------------------------------------------------------------ //
   //
@@ -305,16 +331,17 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
 
       //
       rs_vld_clr  = iss_vld_d_w;
+      rs_rdy_clr  = iss_vld_d_w;
 
       //
-      rs_vld_w    = rs_vld_set | rs_vld_r & (~rs_vld_clr);
+      rs_vld_upt  = rs_vld_set | rs_vld_r & (~rs_vld_clr);
       rs_vld_en   = |{rs_vld_set, rs_vld_clr};
 
       //
       full_w      = (rs_vld_w == '1);
 
       //
-      rs_rdy_w    = rs_rdy_set | rs_rdy_r & (~rs_rdy_clr);
+      rs_rdy_upt  = rs_rdy_set | rs_rdy_r & (~rs_rdy_clr);
       rs_rdy_en   = |{rs_rdy_set, rs_rdy_clr};
 
     end // block: rs_orr_PROC

@@ -385,7 +385,7 @@ module tomasulo (
 
   // ------------------------------------------------------------------------ //
   //
-  tomasulo_rs u_tomasulo_rs_arith_logic_0 (
+  tomasulo_rs u_tomasulo_rs_logic_0 (
     //
       .clk               (clk                  )
     , .rst               (rst                  )
