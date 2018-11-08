@@ -213,7 +213,6 @@ module tomasulo_dispatcher (
   end endfunction
 
   // ------------------------------------------------------------------------ //
-
   // Each instruction dispatch is annotated with an additional ID
   // denoting a position in the commit reorder buffer. This buffer,
   // which is not found in the original Tomasulo paper, plays no
@@ -265,6 +264,7 @@ module tomasulo_dispatcher (
       dis_w.oprand [0]  = compute_oprand(0);
       dis_w.oprand [1]  = compute_oprand(1);
       dis_w.imm         = inst.imm;
+      dis_w.wa          = inst.wa;
 
       //
       rf_tag__wen       = dis_emit;

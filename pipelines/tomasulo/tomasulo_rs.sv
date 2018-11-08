@@ -100,6 +100,7 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
     opcode_t       opcode;
     oprand_t [1:0] oprand;
     tag_t          tag;
+    reg_t          wa;
     imm_t          imm;
     robid_t        robid;
   } rs_entry_t;
@@ -163,6 +164,7 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
     to_rs_entry.tag     = dis_r.tag;
     to_rs_entry.robid   = dis_r.robid;
     to_rs_entry.imm     = dis_r.imm;
+    to_rs_entry.wa      = dis_r.wa;
   end endfunction
 
   //
@@ -174,6 +176,7 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
     to_issue.tag        = rs.tag;
     to_issue.imm        = rs.imm;
     to_issue.robid      = rs.robid;
+    to_issue.wa         = rs.wa;
   end endfunction
 
   // ------------------------------------------------------------------------ //

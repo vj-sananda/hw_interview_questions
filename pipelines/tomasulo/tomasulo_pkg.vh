@@ -74,6 +74,7 @@ package tomasulo_pkg;
       OP_NOP,
       OP_AND,
       OP_NOT,
+      OP_OR,
       OP_XOR,
       OP_MOV0,
       OP_MOV1,
@@ -153,6 +154,7 @@ package tomasulo_pkg;
     oprand_t [1:0] oprand;
     robid_t        robid;
     imm_t          imm;
+    reg_t          wa;
   } dispatch_t;
   localparam int DISPATCH_W  = $bits(dispatch_t);
 
@@ -162,6 +164,7 @@ package tomasulo_pkg;
     tag_t        tag;
     imm_t        imm;
     robid_t      robid;
+    reg_t        wa;
   } issue_t;
 
 endpackage // tomasulo_pkg

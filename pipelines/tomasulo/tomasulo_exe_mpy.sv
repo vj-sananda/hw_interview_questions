@@ -61,6 +61,14 @@ module tomasulo_exe_mpy #(parameter int LATENCY_N = 5)(
   import tomasulo_pkg::*;
 
   //
+  typedef struct packed {
+    reg_t          wa;
+    tag_t          tag;
+    robid_t        robid;
+  } delay_pipe_t;
+  localparam int DELAY_PIPE_W  = $bits(delay_pipe_t);
+
+  //
   logic [31:0]                          mpy__a;
   logic [31:0]                          mpy__b;
   logic                                 mpy__pass;
@@ -69,8 +77,8 @@ module tomasulo_exe_mpy #(parameter int LATENCY_N = 5)(
   logic                                 mpy__y_vld_r;
 
   //
-  tag_t                                 delay_pipe_in;
-  tag_t                                 delay_pipe_out_r;
+  delay_pipe_t                          delay_pipe_in;
+  delay_pipe_t                          delay_pipe_out_r;
 
   // ======================================================================== //
   //                                                                          //
@@ -92,10 +100,12 @@ module tomasulo_exe_mpy #(parameter int LATENCY_N = 5)(
       cdb_r          = '0;
       cdb_r.vld      = mpy__y_vld_r;
       cdb_r.wdata    = mpy__y [0];
-      cdb_r.tag      = delay_pipe_out_r;
+      cdb_r.tag      = delay_pipe_out_r.tag;
+      cdb_r.wa       = delay_pipe_out_r.wa;
+      cdb_r.robid    = delay_pipe_out_r.robid;
 
       //
-      delay_pipe_in  = iss.tag;
+      delay_pipe_in  = '{wa:iss.wa, tag:iss.tag, robid:iss.robid};
 
     end // block: cntrl_PROC
   
@@ -107,7 +117,7 @@ module tomasulo_exe_mpy #(parameter int LATENCY_N = 5)(
 
   // ------------------------------------------------------------------------ //
   //
-  delay_pipe #(.W(TAG_W), .N(LATENCY_N)) u_delay_pipe (
+  delay_pipe #(.W(DELAY_PIPE_W), .N(LATENCY_N)) u_delay_pipe (
     //
       .clk               (clk                )
     , .rst               (rst                )

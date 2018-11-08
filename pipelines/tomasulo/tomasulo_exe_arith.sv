@@ -95,6 +95,8 @@ module tomasulo_exe_arith #(parameter int LATENCY_N = 2) (
       cdb.vld    = iss_vld;
       cdb.tag    = iss_vld ? iss.tag : '0;
       cdb.wdata  = iss_vld ? exe(iss.op, iss.rdata) : '0;
+      cdb.robid  = iss.robid;
+      cdb.wa     = iss.wa;
 
       if (LATENCY_N > 1) begin
 
