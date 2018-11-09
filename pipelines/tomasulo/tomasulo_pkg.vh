@@ -37,6 +37,13 @@ package tomasulo_pkg;
   localparam int RS_N  = 4;
   localparam int ROB_N  = 32;
 
+  typedef logic [3:0] rs_crdt_t;
+
+  //
+  localparam int ARITH_RS_N  = 'd4;
+  localparam int LOGIC_RS_N  = 'd4;
+  localparam int MPY_RS_N  = 'd4;
+
   typedef logic [6:0] sch_t;
 
   //

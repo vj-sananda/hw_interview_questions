@@ -65,14 +65,6 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
 
    //======================================================================== //
    //                                                                         //
-   // Status                                                                  //
-   //                                                                         //
-   //======================================================================== //
-
-   , output logic                                 full_r
-
-   //======================================================================== //
-   //                                                                         //
    // Dispatch                                                                //
    //                                                                         //
    //======================================================================== //
@@ -127,7 +119,6 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
   n_d_t                            rs_rdy_set;
   n_d_t                            rs_rdy_clr;
   //
-  logic                            full_w;
   //
   n_d_t                            rdy_sel;
   n_d_t                            vld_sel;
@@ -341,9 +332,6 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
       rs_vld_en   = |{rs_vld_set, rs_vld_clr};
 
       //
-      full_w      = (rs_vld_w == '1);
-
-      //
       rs_rdy_upt  = rs_rdy_set | rs_rdy_r & (~rs_rdy_clr);
       rs_rdy_en   = |{rs_rdy_set, rs_rdy_clr};
 
@@ -377,14 +365,6 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
       rs_rdy_r <= '0;
     else if (rs_rdy_en)
       rs_rdy_r <= rs_rdy_w;
-
-  // ------------------------------------------------------------------------ //
-  //
-  always_ff @(posedge clk)
-    if (rst)
-      full_r <= '0;
-    else
-      full_r <= full_w;
 
   // ------------------------------------------------------------------------ //
   //

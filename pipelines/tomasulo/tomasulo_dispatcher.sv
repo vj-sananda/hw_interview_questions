@@ -81,7 +81,7 @@ module tomasulo_dispatcher (
    //======================================================================== //
 
    //
-   , input [4:0]                                  rs_full_r
+   , input [4:0]                                  iss_vld_r
    //
    , output tomasulo_pkg::dispatch_t              dis_r
    , output [4:0]                                 dis_vld_r
@@ -143,6 +143,13 @@ module tomasulo_dispatcher (
   logic                                 out_vld_w;
   reg_t                                 out_wa_w;
   word_t                                out_wdata_w;
+  //
+  rs_crdt_t [4:0]                       rs_crdt_r;
+  rs_crdt_t [4:0]                       rs_crdt_w;
+  rs_crdt_t [4:0]                       rs_crdt_init;
+  logic [4:0]                           rs_crdt_en;
+  logic [4:0]                           rs_crdt_navail_r;
+  logic [4:0]                           rs_crdt_navail_w;
 
   // ======================================================================== //
   //                                                                          //
@@ -190,11 +197,11 @@ module tomasulo_dispatcher (
     unique0 casez ({//
                     inst_vld, flm__busy_r, rob__full_r, waw_hazard,
                     //
-                    is_arith(inst.op), rs_full_r [1:0],
+                    is_arith(inst.op), rs_crdt_navail_r [1:0],
                     //
-                    is_logic(inst.op), rs_full_r [3:2],
+                    is_logic(inst.op), rs_crdt_navail_r [3:2],
                     //
-                    is_mpy(inst.op), rs_full_r [4]
+                    is_mpy(inst.op), rs_crdt_navail_r [4]
                     })
       //
       12'b1000_1?0_???_??: ret [0]  = 'b1;
@@ -206,7 +213,7 @@ module tomasulo_dispatcher (
 
       //
       12'b1000_0??_0??_10: ret [4]  = 'b1;
-      default:            ret      = '0;
+      default:             ret      = '0;
     endcase // unique0 casez ({inst_vld, flm__busy_r...
 
     //
@@ -330,11 +337,60 @@ module tomasulo_dispatcher (
 
     end // block: dispatcher_PROC
 
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : rs_crdt_PROC
+
+      //
+      rs_crdt_init [0]       = rs_crdt_t'(ARITH_RS_N);
+      rs_crdt_init [1]       = rs_crdt_t'(ARITH_RS_N);
+      rs_crdt_init [2]       = rs_crdt_t'(LOGIC_RS_N);
+      rs_crdt_init [3]       = rs_crdt_t'(LOGIC_RS_N);
+      rs_crdt_init [4]       = rs_crdt_t'(MPY_RS_N);
+
+      //
+      rs_crdt_en             = (dis_vld_w | iss_vld_r);
+
+      //
+      for (int i = 0; i < 5; i++) begin
+
+        //
+        casez ({dis_vld_w [i], iss_vld_r [i]})
+          2'b10:   rs_crdt_w [i]  = rs_crdt_r [i] - 'b1;
+          2'b01:   rs_crdt_w [i]  = rs_crdt_r [i] + 'b1;
+          default: rs_crdt_w [i]  = rs_crdt_r [i];
+        endcase
+
+        //
+        rs_crdt_navail_w [i]  = (rs_crdt_w [i] == '0);
+      end
+
+    end // block: rs_crdt_PROC
+  
+  
   // ======================================================================== //
   //                                                                          //
   // Flops                                                                    //
   //                                                                          //
   // ======================================================================== //
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      rs_crdt_navail_r <= '0;
+    else
+      rs_crdt_navail_r <= rs_crdt_navail_w;
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    for (int i = 0; i < 5; i++)
+      if (rst)
+        rs_crdt_r [i] <= rs_crdt_init [i];
+      else if (rs_crdt_en [i])
+        rs_crdt_r [i] <= rs_crdt_w [i];
   
   // ------------------------------------------------------------------------ //
   //

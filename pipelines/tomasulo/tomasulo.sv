@@ -106,21 +106,13 @@ module tomasulo (
   logic                       exe_mpy_dis_vld_r;
   logic [4:0]                 dis_vld_r;
   dispatch_t                  dis_r;
-  logic [4:0]                 rs_full_r;
   //
-  logic                       exe_arith_0_iss_vld;
+  logic [4:0]                 iss_vld_r;
+  //
   issue_t                     exe_arith_0_iss;
-  //
-  logic                       exe_arith_1_iss_vld;
   issue_t                     exe_arith_1_iss;
-  //
-  logic                       exe_logic_0_iss_vld;
   issue_t                     exe_logic_0_iss;
-  //
-  logic                       exe_logic_1_iss_vld;
   issue_t                     exe_logic_1_iss;
-  //
-  logic                       exe_logic_1_mpy_vld;
   issue_t                     exe_logic_1_mpy;
   //
   cdb_t                       exe_arith_0_cdb_r;
@@ -288,12 +280,11 @@ module tomasulo (
     , .out_wa_r          (out_wa_r                )
     , .out_wdata_r       (out_wdata_r             )
     //
-    , .rs_full_r         (rs_full_r               )
-    //
     , .inst              (inst                    )
     , .inst_vld          (inst_vld                )
     , .inst_adv          (inst_adv                )
     //
+    , .iss_vld_r         (iss_vld_r               )
     , .dis_r             (dis_r                   )
     , .dis_vld_r         (dis_vld_r               )
   );
@@ -313,7 +304,7 @@ module tomasulo (
 
   // ------------------------------------------------------------------------ //
   //
-  tomasulo_rs u_tomasulo_rs_arith_0 (
+  tomasulo_rs #(.N(ARITH_RS_N)) u_tomasulo_rs_arith_0 (
     //
       .clk               (clk                  )
     , .rst               (rst                  )
@@ -325,12 +316,10 @@ module tomasulo (
     , .cdb_gnt           (rr_gnt [0]           )
     , .cdb_req           (rr_req [0]           )
     //
-    , .full_r            (rs_full_r [0]        )
-    //
     , .dis_vld_r         (dis_vld_r [0]        )
     , .dis_r             (dis_r                )
     //
-    , .iss_vld_r         (exe_arith_0_iss_vld  )
+    , .iss_vld_r         (iss_vld_r [0]        )
     , .iss_r             (exe_arith_0_iss      )
   );
   
@@ -341,7 +330,7 @@ module tomasulo (
       .clk               (clk                )
     , .rst               (rst                )
     //
-    , .iss_vld           (exe_arith_0_iss_vld)
+    , .iss_vld           (iss_vld_r [0]      )
     , .iss               (exe_arith_0_iss    )
     //
     , .cdb_r             (exe_arith_0_cdb_r  )
@@ -349,7 +338,7 @@ module tomasulo (
 
   // ------------------------------------------------------------------------ //
   //
-  tomasulo_rs u_tomasulo_rs_arith_1 (
+  tomasulo_rs #(.N(ARITH_RS_N)) u_tomasulo_rs_arith_1 (
     //
       .clk               (clk                  )
     , .rst               (rst                  )
@@ -361,12 +350,10 @@ module tomasulo (
     , .cdb_gnt           (rr_gnt [1]           )
     , .cdb_req           (rr_req [1]           )
     //
-    , .full_r            (rs_full_r [1]        )
-    //
     , .dis_vld_r         (dis_vld_r [1]        )
     , .dis_r             (dis_r                )
     //
-    , .iss_vld_r         (exe_arith_1_iss_vld  )
+    , .iss_vld_r         (iss_vld_r [1]        )
     , .iss_r             (exe_arith_1_iss      )
   );
 
@@ -377,7 +364,7 @@ module tomasulo (
       .clk               (clk                )
     , .rst               (rst                )
     //
-    , .iss_vld           (exe_arith_1_iss_vld)
+    , .iss_vld           (iss_vld_r [1]      )
     , .iss               (exe_arith_1_iss    )
     //
     , .cdb_r             (exe_arith_1_cdb_r  )
@@ -385,7 +372,7 @@ module tomasulo (
 
   // ------------------------------------------------------------------------ //
   //
-  tomasulo_rs u_tomasulo_rs_logic_0 (
+  tomasulo_rs #(.N(LOGIC_RS_N)) u_tomasulo_rs_logic_0 (
     //
       .clk               (clk                  )
     , .rst               (rst                  )
@@ -397,12 +384,10 @@ module tomasulo (
     , .cdb_gnt           (rr_gnt [2]           )
     , .cdb_req           (rr_req [2]           )
     //
-    , .full_r            (rs_full_r [2]        )
-    //
     , .dis_vld_r         (dis_vld_r [2]        )
     , .dis_r             (dis_r                )
     //
-    , .iss_vld_r         (exe_logic_0_iss_vld  )
+    , .iss_vld_r         (iss_vld_r [2]        )
     , .iss_r             (exe_logic_0_iss      )
   );
 
@@ -413,7 +398,7 @@ module tomasulo (
       .clk               (clk                )
     , .rst               (rst                )
     //
-    , .iss_vld           (exe_logic_0_iss_vld)
+    , .iss_vld           (iss_vld_r [2]      )
     , .iss               (exe_logic_0_iss    )
     //
     , .cdb_r             (exe_logic_0_cdb_r  )
@@ -421,7 +406,7 @@ module tomasulo (
 
   // ------------------------------------------------------------------------ //
   //
-  tomasulo_rs u_tomasulo_rs_logic_1 (
+  tomasulo_rs #(.N(LOGIC_RS_N)) u_tomasulo_rs_logic_1 (
     //
       .clk               (clk                  )
     , .rst               (rst                  )
@@ -433,12 +418,10 @@ module tomasulo (
     , .cdb_gnt           (rr_gnt [3]           )
     , .cdb_req           (rr_req [3]           )
     //
-    , .full_r            (rs_full_r [3]        )
-    //
     , .dis_vld_r         (dis_vld_r [3]        )
     , .dis_r             (dis_r                )
     //
-    , .iss_vld_r         (exe_logic_1_iss_vld  )
+    , .iss_vld_r         (iss_vld_r [3]        )
     , .iss_r             (exe_logic_0_iss      )
   );
 
@@ -449,7 +432,7 @@ module tomasulo (
       .clk               (clk                )
     , .rst               (rst                )
     //
-    , .iss_vld           (exe_logic_1_iss_vld)
+    , .iss_vld           (iss_vld_r [3]      )
     , .iss               (exe_logic_0_iss    )
     //
     , .cdb_r             (exe_logic_1_cdb_r  )
@@ -457,7 +440,7 @@ module tomasulo (
 
   // ------------------------------------------------------------------------ //
   //
-  tomasulo_rs u_tomasulo_rs_mpy (
+  tomasulo_rs #(.N(MPY_RS_N)) u_tomasulo_rs_mpy (
     //
       .clk               (clk                )
     , .rst               (rst                )
@@ -469,12 +452,10 @@ module tomasulo (
     , .cdb_gnt           (rr_gnt [4]         )
     , .cdb_req           (rr_req [4]         )
     //
-    , .full_r            (rs_full_r [4]      )
-    //
     , .dis_vld_r         (dis_vld_r [4]      )
     , .dis_r             (dis_r              )
     //
-    , .iss_vld_r         (exe_logic_1_mpy_vld)
+    , .iss_vld_r         (iss_vld_r [4]      )
     , .iss_r             (exe_logic_1_mpy    )
   );
 
@@ -485,7 +466,7 @@ module tomasulo (
       .clk               (clk                )
     , .rst               (rst                )
     //
-    , .iss_vld           (exe_logic_1_mpy_vld)
+    , .iss_vld           (iss_vld_r [4]      )
     , .iss               (exe_logic_1_mpy    )
     //
     , .cdb_r             (exe_mpy_cdb_r      )
