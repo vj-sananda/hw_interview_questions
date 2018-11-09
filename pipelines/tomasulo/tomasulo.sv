@@ -480,7 +480,7 @@ module tomasulo (
 
   // ------------------------------------------------------------------------ //
   //
-  tomasulo_exe_mpy #(.LATENCY_N(LATENCY_MPY_N)) u_exe_mpy (
+  tomasulo_exe_mpy u_exe_mpy (
     //
       .clk               (clk                )
     , .rst               (rst                )

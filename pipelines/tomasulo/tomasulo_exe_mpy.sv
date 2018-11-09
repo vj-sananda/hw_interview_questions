@@ -30,7 +30,7 @@
 
 `include "tomasulo_pkg.vh"
 
-module tomasulo_exe_mpy #(parameter int LATENCY_N = 5)(
+module tomasulo_exe_mpy (
 
    //======================================================================== //
    //                                                                         //
@@ -67,7 +67,9 @@ module tomasulo_exe_mpy #(parameter int LATENCY_N = 5)(
     robid_t        robid;
   } delay_pipe_t;
   localparam int DELAY_PIPE_W  = $bits(delay_pipe_t);
-
+  //
+  cdb_t                                 cdb_w;
+  logic                                 cdb_en;
   //
   logic [31:0]                          mpy__a;
   logic [31:0]                          mpy__b;
@@ -79,6 +81,9 @@ module tomasulo_exe_mpy #(parameter int LATENCY_N = 5)(
   //
   delay_pipe_t                          delay_pipe_in;
   delay_pipe_t                          delay_pipe_out_r;
+
+  //
+  cdb_t                                 cdb;
 
   // ======================================================================== //
   //                                                                          //
@@ -92,22 +97,40 @@ module tomasulo_exe_mpy #(parameter int LATENCY_N = 5)(
     begin : cntrl_PROC
 
       //
-      mpy__a         = '0;
-      mpy__b         = '0;
-      mpy__pass      = '0;
+      mpy__pass      = iss_vld;
+      mpy__a         = iss.rdata [0];
+      mpy__b         = iss.rdata [1];
 
       //
-      cdb_r          = '0;
-      cdb_r.vld      = mpy__y_vld_r;
-      cdb_r.wdata    = mpy__y [0];
-      cdb_r.tag      = delay_pipe_out_r.tag;
-      cdb_r.wa       = delay_pipe_out_r.wa;
-      cdb_r.robid    = delay_pipe_out_r.robid;
+      cdb            = '0;
+      cdb.vld        = mpy__y_vld_r;
+      cdb.wdata      = mpy__y [0];
+      cdb.tag        = delay_pipe_out_r.tag;
+      cdb.wa         = delay_pipe_out_r.wa;
+      cdb.robid      = delay_pipe_out_r.robid;
+
+      //
+      cdb_en         = (cdb.vld | cdb_r.vld);
+      cdb_w          = cdb.vld ? cdb : '0;
 
       //
       delay_pipe_in  = '{wa:iss.wa, tag:iss.tag, robid:iss.robid};
 
     end // block: cntrl_PROC
+
+  // ======================================================================== //
+  //                                                                          //
+  // Flops                                                                    //
+  //                                                                          //
+  // ======================================================================== //
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      cdb_r <= '0;
+    else if (cdb_en)
+      cdb_r <= cdb_w;
   
   // ======================================================================== //
   //                                                                          //
@@ -117,7 +140,7 @@ module tomasulo_exe_mpy #(parameter int LATENCY_N = 5)(
 
   // ------------------------------------------------------------------------ //
   //
-  delay_pipe #(.W(DELAY_PIPE_W), .N(LATENCY_N)) u_delay_pipe (
+  delay_pipe #(.W(DELAY_PIPE_W), .N(5)) u_delay_pipe (
     //
       .clk               (clk                )
     , .rst               (rst                )

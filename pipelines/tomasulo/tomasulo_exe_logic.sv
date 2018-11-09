@@ -110,13 +110,13 @@ module tomasulo_exe_logic #(parameter int LATENCY_N = 1) (
 
         //
         cdb_en         = (delay_pipe_out_r.vld | cdb_r.vld);
-        cdb_w          =  delay_pipe_out_r;
+        cdb_w          =  delay_pipe_out_r.vld ? delay_pipe_out_r : '0;
 
       end else begin
 
         //
         cdb_en  = (iss_vld | cdb_r.vld);
-        cdb_w   = cdb;
+        cdb_w   = cdb.vld ? cdb : '0;
 
       end
 

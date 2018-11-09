@@ -182,11 +182,13 @@ module tomasulo_dispatcher (
 
   //
   function logic [4:0] update_dis_vld_w; begin
-    logic [4:0] ret   = '0;
+    logic [4:0] ret         = '0;
+
+    logic       waw_hazard  = reg_busy_r[inst.wa];
 
     //
     unique0 casez ({//
-                    inst_vld, flm__busy_r, rob__full_r,
+                    inst_vld, flm__busy_r, rob__full_r, waw_hazard,
                     //
                     is_arith(inst.op), rs_full_r [1:0],
                     //
@@ -195,15 +197,15 @@ module tomasulo_dispatcher (
                     is_mpy(inst.op), rs_full_r [4]
                     })
       //
-      11'b100_1?0_???_??: ret [0]  = 'b1;
-      11'b100_101_???_??: ret [1]  = 'b1;
+      12'b1000_1?0_???_??: ret [0]  = 'b1;
+      12'b1000_101_???_??: ret [1]  = 'b1;
 
       //
-      11'b100_0??_1?0_??: ret [2]  = 'b1;
-      11'b100_0??_101_??: ret [3]  = 'b1;
+      12'b1000_0??_1?0_??: ret [2]  = 'b1;
+      12'b1000_0??_101_??: ret [3]  = 'b1;
 
       //
-      11'b100_0??_0??_10: ret [4]  = 'b1;
+      12'b1000_0??_0??_10: ret [4]  = 'b1;
       default:            ret      = '0;
     endcase // unique0 casez ({inst_vld, flm__busy_r...
 

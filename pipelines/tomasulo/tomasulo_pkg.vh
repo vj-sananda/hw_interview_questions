@@ -33,11 +33,11 @@ package tomasulo_pkg;
   //
   localparam int LATENCY_ARITH_N  = 2;
   localparam int LATENCY_LOGIC_N  = 1;
-  localparam int LATENCY_MPY_N  = 5;
+  localparam int LATENCY_MPY_N  = 6;
   localparam int RS_N  = 4;
   localparam int ROB_N  = 32;
 
-  typedef logic [5:0] sch_t;
+  typedef logic [6:0] sch_t;
 
   //
   typedef logic [4:0] reg_t;
