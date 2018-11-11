@@ -100,6 +100,13 @@ module tomasulo_exe_mpy (
   always_comb
     begin : cntrl_PROC
 
+      // Ideally the RS_EXE should not issue back-to-back until the
+      // completion from the preceeding instruction has been seen. To
+      // do this correctly would necessitate a slight refactoring of
+      // the RS logic. As the EXE is unique in so far that it is
+      // non-pipelined, a quick and simple (but dirty) solution is to
+      // simply apply back pressure on the valid issue - even though
+      // it is not registered.
       //
       iss_busy_r     = (iss_vld | mpy__busy_r);
 
