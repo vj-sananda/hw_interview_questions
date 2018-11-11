@@ -102,6 +102,7 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
   rs_entry_t [N - 1:0]             rs_entry_upt;
   rs_entry_t [N - 1:0]             rs_entry_w;
   logic      [N - 1:0]             rs_entry_en;
+  logic      [N - 1:0][1:0]        rs_latch_cdb;
   //
   n_d_t                            rs_vld_r;
   n_d_t                            rs_vld_upt;
@@ -230,22 +231,6 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
             //
             rs_entry_en [i]   = 'b1;
             rs_entry_upt [i]  = to_rs_entry(dis_r);
-
-            for (int o = 0; o < 2; o++) begin
-              logic capture_cdb;
-              oprand_t oprnd;
-
-              oprnd        = rs_entry_upt [i].oprand [o];
-              capture_cdb  = cdb_r.vld & oprnd.busy &
-                             (oprnd.u.t.tag == cdb_r.tag);
-
-              if (capture_cdb) begin
-                rs_entry_en [i]                   = 'b1;
-
-                rs_entry_upt [i].oprand [o].busy  = 'b0;
-                rs_entry_upt [i].oprand [o].u.w   = cdb_r.wdata;
-              end
-            end
           end
 
           // Current RS-entry is active, but not ready. Snoop inbound
@@ -253,23 +238,6 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
           // oprands in the station.
           //
           6'b1?_?1_0?: begin
-
-            //
-            for (int o = 0; o < 2; o++) begin
-              logic capture_cdb;
-              oprand_t oprnd;
-
-              oprnd        = rs_entry_r [i].oprand [o];
-              capture_cdb  = cdb_r.vld & oprnd.busy &
-                             (oprnd.u.t.tag == cdb_r.tag);
-
-              if (capture_cdb) begin
-                rs_entry_en [i]                   = 'b1;
-
-                rs_entry_upt [i].oprand [o].busy  = 'b0;
-                rs_entry_upt [i].oprand [o].u.w   = cdb_r.wdata;
-              end
-            end
           end
 
           // The current station entry is valid, ready and is
@@ -280,6 +248,23 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
           default:;
 
         endcase // casez ({rs_vld_r [i]})
+
+        // Bypass incoming CDB to current RS entry, whether already
+        // present in the RS table or incoming from a dispatch.
+        //
+        for (int o = 0; o < 2; o++) begin
+
+          //
+          rs_latch_cdb [i][o]  = cdb_r.vld & rs_entry_upt [i].oprand [o].busy &
+                                 (rs_entry_upt [i].oprand [o].u.t.tag == cdb_r.tag);
+
+          if (rs_latch_cdb [i][o]) begin
+            rs_entry_en [i]                   = 'b1;
+
+            rs_entry_upt [i].oprand [o].busy  = 'b0;
+            rs_entry_upt [i].oprand [o].u.w   = cdb_r.wdata;
+          end
+        end
 
         if (rs_entry_en [i])
           // If neither busy bits are set at the end of this round,

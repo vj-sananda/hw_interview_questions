@@ -103,6 +103,8 @@ module tomasulo_dispatcher (
   //
   logic                                 dis_en;
   dispatch_t                            dis_w;
+  logic                                 waw_hazard;
+  logic                                 can_dispatch;
   logic [4:0]                           dis_vld_w;
   logic                                 dis_emit;
   //
@@ -166,61 +168,6 @@ module tomasulo_dispatcher (
         ffs  = tag_t'(i);
   end endfunction
 
-  //
-  function oprand_t compute_oprand(int i); begin
-    logic bypass_cdb;
-    
-    //
-    bypass_cdb      = cdb_r.vld & (inst.ra [i] == cdb_r.wa);
-
-    //
-    compute_oprand  = '0;
-    casez ({reg_busy_r [inst.ra [i]], bypass_cdb, has_oprand(inst.op)})
-      3'b1_00: begin
-        compute_oprand.busy     = 'b1;
-        compute_oprand.u.t.tag  = rf_tag__rdata [i];
-      end
-      3'b1_10: compute_oprand.u.w  = cdb_r.wdata;
-      3'b0_?0: compute_oprand.u.w  = rf_reg__rdata [i];
-      default: ;
-    endcase // casez ({compute_oprand [i].busy, bypass_cdb})
-
-  end endfunction
-
-  //
-  function logic [4:0] update_dis_vld_w; begin
-    logic [4:0] ret         = '0;
-
-    logic       waw_hazard  = reg_busy_r[inst.wa];
-
-    //
-    unique0 casez ({//
-                    inst_vld, flm__busy_r, rob__full_r, waw_hazard,
-                    //
-                    is_arith(inst.op), rs_crdt_navail_r [1:0],
-                    //
-                    is_logic(inst.op), rs_crdt_navail_r [3:2],
-                    //
-                    is_mpy(inst.op), rs_crdt_navail_r [4]
-                    })
-      //
-      12'b1000_1?0_???_??: ret [0]  = 'b1;
-      12'b1000_101_???_??: ret [1]  = 'b1;
-
-      //
-      12'b1000_0??_1?0_??: ret [2]  = 'b1;
-      12'b1000_0??_101_??: ret [3]  = 'b1;
-
-      //
-      12'b1000_0??_0??_10: ret [4]  = 'b1;
-      default:             ret      = '0;
-    endcase // unique0 casez ({inst_vld, flm__busy_r...
-
-    //
-    update_dis_vld_w  = ret;
-
-  end endfunction
-
   // ------------------------------------------------------------------------ //
   // Each instruction dispatch is annotated with an additional ID
   // denoting a position in the commit reorder buffer. This buffer,
@@ -232,8 +179,49 @@ module tomasulo_dispatcher (
   always_comb
     begin : lookup_PROC
 
+      // Contrary to contemporary thinking, Tomasulo's original
+      // approach does not resolve WAW hazards. To do so, it would be
+      // necessary to maintain a ROB-like retirement structure and
+      // enable outstanding oprands to be bypassed from it. This is
+      // more akin to the standard register renaming technique
+      // employed by modern day CPU.
       //
-      dis_vld_w        = update_dis_vld_w();
+      // To resolve this problem, instruction dispatch is stalled
+      // until the WAW on the head-of-line instruction has been
+      // resolved.
+      //
+      waw_hazard    = reg_busy_r[inst.wa];
+
+      //
+      can_dispatch  = inst_vld & ~(flm__busy_r | rob__full_r | waw_hazard);
+      
+      //
+      dis_vld_w     = '0;
+      
+      //
+      unique0 casez ({//
+                      can_dispatch,
+                      //
+                      is_arith(inst.op), rs_crdt_navail_r [1:0],
+                      //
+                      is_logic(inst.op), rs_crdt_navail_r [3:2],
+                      //
+                      is_mpy(inst.op), rs_crdt_navail_r [4]
+                      })
+        //
+        9'b1_1?0_???_??: dis_vld_w [0]  = 'b1;
+        9'b1_101_???_??: dis_vld_w [1]  = 'b1;
+
+        //
+        9'b1_0??_1?0_??: dis_vld_w [2]  = 'b1;
+        9'b1_0??_101_??: dis_vld_w [3]  = 'b1;
+
+        //
+        9'b1_0??_0??_10: dis_vld_w [4]  = 'b1;
+        default:         dis_vld_w      = '0;
+      endcase // unique0 casez ({inst_vld, flm__busy_r...
+      
+      //
       dis_emit         = (|dis_vld_w);
 
       //
@@ -263,15 +251,29 @@ module tomasulo_dispatcher (
     begin : dispatch_PROC
 
       //
-      dis_en            = dis_emit;
+      dis_en        = dis_emit;
 
       //
-      dis_w             = '0;
-      dis_w.opcode      = inst.op;
-      dis_w.tag         = flm__alloc_id;
-      dis_w.robid       = rob__alloc_id;
-      dis_w.oprand [0]  = compute_oprand(0);
-      dis_w.oprand [1]  = compute_oprand(1);
+      dis_w         = '0;
+      dis_w.opcode  = inst.op;
+      dis_w.tag     = flm__alloc_id;
+      dis_w.robid   = rob__alloc_id;
+      for (int i = 0; i < 2; i++) begin
+        logic bypass_cdb;
+
+        bypass_cdb = cdb_r.vld & (inst.ra [i] == cdb_r.wa);
+
+        //
+        casez ({reg_busy_r [inst.ra [i]], bypass_cdb, has_oprand(inst.op)})
+          3'b1_00: begin
+            dis_w.oprand [i].busy     = 'b1;
+            dis_w.oprand [i].u.t.tag  = rf_tag__rdata [i];
+          end
+          3'b1_10: dis_w.oprand [i].u.w  = cdb_r.wdata;
+          3'b0_?0: dis_w.oprand [i].u.w  = rf_reg__rdata [i];
+          default: ;
+        endcase // casez ({compute_oprand [i].busy, bypass_cdb})
+      end
       dis_w.imm         = inst.imm;
       dis_w.wa          = inst.wa;
 
