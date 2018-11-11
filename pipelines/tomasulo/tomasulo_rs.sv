@@ -230,6 +230,22 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
             //
             rs_entry_en [i]   = 'b1;
             rs_entry_upt [i]  = to_rs_entry(dis_r);
+
+            for (int o = 0; o < 2; o++) begin
+              logic capture_cdb;
+              oprand_t oprnd;
+
+              oprnd        = rs_entry_upt [i].oprand [o];
+              capture_cdb  = cdb_r.vld & oprnd.busy &
+                             (oprnd.u.t.tag == cdb_r.tag);
+
+              if (capture_cdb) begin
+                rs_entry_en [i]                   = 'b1;
+
+                rs_entry_upt [i].oprand [o].busy  = 'b0;
+                rs_entry_upt [i].oprand [o].u.w   = cdb_r.wdata;
+              end
+            end
           end
 
           // Current RS-entry is active, but not ready. Snoop inbound
