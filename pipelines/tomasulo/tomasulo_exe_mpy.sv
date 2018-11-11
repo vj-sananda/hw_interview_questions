@@ -49,6 +49,8 @@ module tomasulo_exe_mpy (
 
    , input                                        iss_vld
    , input  tomasulo_pkg::issue_t                 iss
+   //
+   , output logic                                 iss_busy_r
 
    //======================================================================== //
    //                                                                         //
@@ -77,6 +79,8 @@ module tomasulo_exe_mpy (
   //
   logic [1:0][31:0]                     mpy__y;
   logic                                 mpy__y_vld_r;
+  //
+  logic                                 mpy__busy_r;
 
   //
   delay_pipe_t                          delay_pipe_in;
@@ -95,6 +99,9 @@ module tomasulo_exe_mpy (
   //
   always_comb
     begin : cntrl_PROC
+
+      //
+      iss_busy_r     = (iss_vld | mpy__busy_r);
 
       //
       mpy__pass      = iss_vld;
@@ -163,7 +170,7 @@ module tomasulo_exe_mpy (
     , .y                 (mpy__y             )
     , .y_vld_r           (mpy__y_vld_r       )
     //
-    , .busy_r            ()
+    , .busy_r            (mpy__busy_r        )
   );
 
 endmodule // tomasulo_exe_logic

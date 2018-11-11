@@ -49,6 +49,8 @@ module tomasulo_exe_logic #(parameter int LATENCY_N = 1) (
 
    , input                                        iss_vld
    , input  tomasulo_pkg::issue_t                 iss
+   //
+   , output logic                                 iss_busy_r
 
    //======================================================================== //
    //                                                                         //
@@ -97,11 +99,14 @@ module tomasulo_exe_logic #(parameter int LATENCY_N = 1) (
     begin : exe_PROC
 
       //
-      cdb.vld    = iss_vld;
-      cdb.tag    = iss_vld ? iss.tag : '0;
-      cdb.wdata  = iss_vld ? exe(iss.op, iss.rdata, iss.imm) : '0;
-      cdb.robid  = iss.robid;
-      cdb.wa     = iss.wa;
+      iss_busy_r  = '0;
+
+      //
+      cdb.vld     = iss_vld;
+      cdb.tag     = iss_vld ? iss.tag : '0;
+      cdb.wdata   = iss_vld ? exe(iss.op, iss.rdata, iss.imm) : '0;
+      cdb.robid   = iss.robid;
+      cdb.wa      = iss.wa;
 
       if (LATENCY_N > 1) begin
 

@@ -78,6 +78,9 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
    //                                                                         //
    //======================================================================== //
 
+   //
+   , input                                        iss_busy_r
+   //
    , output logic                                 iss_vld_r
    , output tomasulo_pkg::issue_t                 iss_r
 );
@@ -177,7 +180,7 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
     begin : sel_PROC
 
       //
-      rdy_sel   = ffs( rs_rdy_r);
+      rdy_sel   = iss_busy_r ? '0 : ffs( rs_rdy_r);
 
       //
       vld_sel   = ffs( rs_vld_r);
@@ -243,7 +246,7 @@ module tomasulo_rs #(parameter int N = 4, parameter int LATENCY_N = 2) (
           // The current station entry is valid, ready and is
           // scheduled for issue.
           //
-          6'b1?_??_11: cdb_req_n [i]  = (~sch_r [LATENCY_N]);
+          6'b1?_??_11: cdb_req_n [i]  = (~sch_r [LATENCY_N + 1]);
 
           default:;
 

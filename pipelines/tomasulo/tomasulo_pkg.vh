@@ -44,7 +44,7 @@ package tomasulo_pkg;
   localparam int LOGIC_RS_N  = 'd4;
   localparam int MPY_RS_N  = 'd4;
 
-  typedef logic [6:0] sch_t;
+  typedef logic [7:0] sch_t;
 
   //
   typedef logic [4:0] reg_t;

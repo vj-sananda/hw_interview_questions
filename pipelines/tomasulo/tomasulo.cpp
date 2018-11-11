@@ -72,7 +72,7 @@ struct scv_extensions<OP> : public scv_enum_base<OP> {
     SCV_ENUM(OP_MOV0);
     SCV_ENUM(OP_MOV1);
     SCV_ENUM(OP_MOVI);
-    //    SCV_ENUM(OP_MPY);
+    SCV_ENUM(OP_MPY);
   }
 };
 
