@@ -26,5 +26,3 @@
 ##========================================================================== //
 
 add_subdirectory(sorted_lists)
-add_subdirectory(vending_machine_fsm)
-add_subdirectory(vending_machine_dp)
