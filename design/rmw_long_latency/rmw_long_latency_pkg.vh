@@ -42,6 +42,11 @@ package rmw_long_latency_pkg;
                             } op_t;
 
   //
+  function logic op_requires_tbl(op_t op); begin
+    op_requires_tbl  = ((op == OP_ADDI) || (op == OP_SUBI));
+  end endfunction
+
+  //
   typedef struct packed {
     id_t id;
     word_t imm;
@@ -52,6 +57,8 @@ package rmw_long_latency_pkg;
   // lookup latency.
   //
   localparam int N  = 64;
+
+  typedef logic [N - 1:0] n_t;
 
   // The maximum number of concurrent in flight commands to TBL.
   //
@@ -68,7 +75,10 @@ package rmw_long_latency_pkg;
   
   //
   localparam int PTR_W  = $clog2(N);
-  typedef logic [PTR_W-1:0] ptr_t;
+  typedef struct packed {
+    logic             x;
+    logic [PTR_W-1:0] p;
+  } ptr_t;
 
 endpackage // rmw_long_latency_pkg
 

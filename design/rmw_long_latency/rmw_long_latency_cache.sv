@@ -106,16 +106,11 @@ module rmw_long_latency_cache (
   
   //
   typedef struct packed {
+    logic                     vld;
     state_t                   state;
-    
-    //
     issue_t                   issue;
-    //
-    logic                     tag_vld;
     tag_t                     tag;
-    //
-    ptr_t                     bypass_ptr;
-    //
+    ptr_t                     byptr;
     word_t                    word;
   } table_t;
 
@@ -129,19 +124,19 @@ module rmw_long_latency_cache (
   table_t                               table_alloc;
   table_t                               table_iss;
   table_t                               table_cmpl;
+  table_t                               table_retire;
   //
   logic [N - 1:0]                       table_issue_vld;
   logic [N - 1:0]                       table_rd_ctag_vld;
   logic [N - 1:0]                       table_bypass_vld;
-  logic [N - 1:0]                       table_wrbk_vld;
-  //
-  logic [N - 1:0]                       table_vld_r;
-  logic [N - 1:0]                       table_vld_w;
+  logic [N - 1:0]                       table_retire_vld;
 
   //
   ptr_t                                 alloc_ptr_r;
   ptr_t                                 alloc_ptr_w;
   logic                                 alloc_ptr_en;
+  //
+  n_t                                   alloc_ptr_d;
   //
   ptr_t                                 iss_ptr_r;
   ptr_t                                 iss_ptr_w;
@@ -155,13 +150,19 @@ module rmw_long_latency_cache (
   ptr_t                                 retire_ptr_w;
   logic                                 retire_ptr_en;
   //
+  logic                                 alloc_adv;
+  logic                                 iss_adv;
+  logic                                 cmpl_adv;
+  logic                                 retire_adv;
+  //
   logic                                 full_w;
   logic                                 full_r;
   //
   logic                                 exe_wrbk_r;
+  logic                                 exe_wrbk_bypass_r;
   word_t                                exe_wrbk_word_r;
   //
-  logic                                 exe_bypass;
+  logic                                 exe_wrbk_bypass_w;
   //
   logic                                 exe_iss_vld_w;
   word_t                                exe_iss_imm_w;
@@ -171,6 +172,9 @@ module rmw_long_latency_cache (
   logic                                 tbl_wr_w;
   id_t                                  tbl_wr_id_w;
   word_t                                tbl_wr_word_w;
+  //
+  logic                                 tbl_bypass;
+  ptr_t                                 tbl_bypass_ptr;
   //
   logic                                 tbl_rd_w;
   id_t                                  tbl_rd_id_w;
@@ -185,6 +189,8 @@ module rmw_long_latency_cache (
   logic                                 tbl_flm__busy_r;
   logic [IN_FLIGHT_N - 1:0]             tbl_flm__state_w;
   logic [IN_FLIGHT_N - 1:0]             tbl_flm__state_r;
+  //
+  tag_t                                 iss_tag;
 
   // ======================================================================== //
   //                                                                          //
@@ -198,9 +204,13 @@ module rmw_long_latency_cache (
     begin : table_ptr_PROC
 
       //
-      table_alloc  = table_r [alloc_ptr_r];
-      table_iss    = table_r [iss_ptr_r];
-      table_cmpl   = table_r [cmpl_ptr_r];
+      table_alloc   = table_r [alloc_ptr_r.p];
+      table_iss     = table_r [iss_ptr_r.p];
+      table_cmpl    = table_r [cmpl_ptr_r.p];
+      table_retire  = table_r [retire_ptr_r.p];
+
+      //
+      iss_tag       = clz_tag(tbl_flm__state_r);
 
     end // block: table_ptr_PROC
   
@@ -208,9 +218,6 @@ module rmw_long_latency_cache (
   //
   always_comb
     begin : table_PROC
-
-      //
-      iss_rdy_w          = (~full_r);
 
       //
       table_issue        = '0;
@@ -224,41 +231,49 @@ module rmw_long_latency_cache (
       for (int i = 0; i < N; i++) begin
 
         //
-        casez ({table_vld_r [i], iss_vld_r, iss_rdy_w})
-          3'b0_11: table_issue_vld [i]  = (alloc_ptr_r == ptr_t'(i));
-          default: table_issue_vld [i]  = 'b0;
+        casez ({table_r [i].vld, iss_vld_r, iss_rdy_w, alloc_ptr_d [i]})
+          4'b0_111: table_issue_vld [i]  = 'b1;
+          default:  table_issue_vld [i]  = 'b0;
         endcase // casez ({})
 
         //
-        casez ({table_vld_r [i], tbl_rd_word_vld_r})
+        casez ({table_r [i].vld, tbl_rd_word_vld_r})
           2'b1_1:  table_rd_ctag_vld [i]  = (table_r [i].tag == tbl_rd_ctag_r);
           default: table_rd_ctag_vld [i]  = 'b0;
         endcase // casez ({})
         
         //
-        casez ({table_vld_r [i], exe_wrbk_r})
-          2'b1_1:  table_bypass_vld [i]  = (table_r [i].bypass_ptr == cmpl_ptr_r);
+        casez ({table_r [i].vld, exe_wrbk_r})
+          2'b1_1:  table_bypass_vld [i]  = (table_r [i].byptr == cmpl_ptr_r);
           default: table_bypass_vld [i]  = 'b0;
         endcase // casez ({})
 
         //
-        table_w [i]  = table_r [i];
+        table_retire_vld [i] = '0;
+
+        //
+        table_w [i]       = table_r [i];
         
         //
-        casez ({table_issue_vld [i], table_rd_ctag_vld [i], table_bypass_vld [i]})
-          3'b1??: begin
-            table_w [i].state  = 1'b0 ? OP_AWAIT_BYPASS : OP_AWAIT_TAG;
+        unique0 case (1'b1)
+          table_issue_vld [i]: begin
+            table_w [i].vld      = 'b1;
+            table_w [i].state    = tbl_rd_w ? OP_AWAIT_BYPASS : OP_AWAIT_TAG;
+            table_w [i].tag      = iss_tag;
+            table_w [i].byptr    = tbl_bypass_ptr;
           end
-          3'b01?: begin
+          table_rd_ctag_vld [i]: begin
             table_w [i].state  = OP_RDY;
             table_w [i].word   = tbl_rd_word_r;
           end
-          3'b001: begin
+          table_bypass_vld [i]: begin
             table_w [i].state  = OP_RDY;
             table_w [i].word   = exe_wrbk_word_r;
           end
-          default:;
-        endcase // casez ({iss_vld_r, iss_rdy_w, table_rd_ctag_vld [i], table_bypass_vld [i]})
+          table_retire_vld [i]: begin
+            table_w [i].vld  = 'b0;
+          end
+        endcase // unique0 case (1'b1)
         
         //
         table_en [i]  = (table_rd_ctag_vld [i] | table_bypass_vld [i]);
@@ -269,57 +284,97 @@ module rmw_long_latency_cache (
   
   // ------------------------------------------------------------------------ //
   //
+  function ptr_t inc(ptr_t p); begin
+    inc  = p;
+    if (p == ptr_t'(N - 1)) begin
+      inc.x  = ~inc.x;
+      inc.p  = '0;
+    end else begin
+      inc.p  = p.p + 'b1;
+    end
+  end endfunction
+
+  //
+  function logic is_full (ptr_t a, ptr_t b); begin
+    is_full  = (a.x ^ b.x) & (a.p == b.p);
+  end endfunction
+
+  //
+  function n_t lr (n_t n, ptr_t p); begin
+    n_t [1:0] n_extended  = ({n, n} >> p);
+    lr                    = n_extended[0];
+  end endfunction
+
+  //
+  function n_t table_match_on_id (id_t id); begin
+    for (int i = 0; i < N; i++)
+      table_vld [i]  = table_r [i].vld & (table_r [i].issue.id == id);
+  end endfunction
+
+  //
   always_comb
     begin : ptr_PROC
 
       //
-      alloc_ptr_w    = 'b0 ? (alloc_ptr_r + 'b1) : alloc_ptr_r;
-      alloc_ptr_en   = '0;
+      iss_rdy_w       = (~full_r);
 
       //
-      iss_ptr_w      = 'b0 ? (iss_ptr_r + 'b1) : iss_ptr_r;
-      iss_ptr_en     = '0;
+      alloc_adv       = iss_vld_r & iss_rdy_w;
+      iss_adv         = '0;
+      cmpl_adv        = '0;
+      retire_adv      = '0;
       
       //
-      cmpl_ptr_w     = 'b0 ? (cmpl_ptr_r + 'b1) : cmpl_ptr_r;
-      cmpl_ptr_en    = '0;
+      alloc_ptr_w     = alloc_adv ? inc(alloc_ptr_r) : alloc_ptr_r;
+      alloc_ptr_en    = alloc_adv;
+
+      //
+      iss_ptr_w       = iss_adv ? inc(iss_ptr_r) : iss_ptr_r;
+      iss_ptr_en      = iss_adv;
       
       //
-      retire_ptr_w   = 'b0 ? (retire_ptr_r + 'b1) : retire_ptr_r;
-      retire_ptr_en  = '0;
+      cmpl_ptr_w      = cmpl_adv ? inc(cmpl_ptr_r) : cmpl_ptr_r;
+      cmpl_ptr_en     = cmpl_adv;
+      
+      //
+      retire_ptr_w    = retire_adv ? inc(retire_ptr_r) : retire_ptr_r;
+      retire_ptr_en   = retire_adv;
+
+      //
+      alloc_ptr_d     = ('b1 << alloc_ptr_r);
+      
+      //
+      full_w          = is_full(alloc_ptr_w, retire_ptr_w);
+
+      //
+      tbl_wr_w        = 'b0;
+      tbl_wr_id_w     = '0;
+      tbl_wr_word_w   = '0;
+
+      //
+      tbl_bypass      = '0;
+      tbl_bypass_ptr  = '0;
+
+      //
+      tbl_rd_w        = alloc_adv & op_requires_tbl(iss_r.op) & (~tbl_bypass);
+      tbl_rd_id_w     = iss_r.id;
+      tbl_rd_itag_w   = iss_tag;
 
     end // block: ptr_PROC
-  
-  // ------------------------------------------------------------------------ //
-  //
-  always_comb
-    begin : tbl_PROC
 
-      //
-      tbl_wr_w       = 'b0;
-      tbl_wr_id_w    = '0;
-      tbl_wr_word_w  = '0;
-
-      //
-      tbl_rd_w       = '0;
-      tbl_rd_id_w    = '0;
-      tbl_rd_itag_w  = '0;
-
-    end // block: tbl_PROC
-  
   // ------------------------------------------------------------------------ //
   //
   always_comb
     begin : bypass_PROC
 
       //
-      exe_bypass     = 'b0;
+      exe_wrbk_bypass_w  = '0;
 
       //
-      exe_iss_vld_w  = '0;
-      exe_iss_imm_w  = table_iss.issue.imm;
-      exe_iss_op_w   = table_iss.issue.op;
-      exe_iss_reg_w  = exe_bypass ? exe_wrbk_word_w : table_iss.word;
+      exe_iss_vld_w      = '0;
+      exe_iss_imm_w      = table_iss.issue.imm;
+      exe_iss_op_w       = table_iss.issue.op;
+      exe_iss_reg_w      = exe_wrbk_bypass_w ? exe_wrbk_word_w : table_iss.word;
 
     end // block: bypass_PROC
   
@@ -340,8 +395,10 @@ module rmw_long_latency_cache (
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
-    if (exe_wrbk_w)
-      exe_wrbk_word_r <= exe_wrbk_word_w;
+    if (exe_wrbk_w) begin
+      exe_wrbk_bypass_r <= exe_wrbk_bypass_w;
+      exe_wrbk_word_r   <= exe_wrbk_word_w;
+    end
   
   // ------------------------------------------------------------------------ //
   //
@@ -382,21 +439,16 @@ module rmw_long_latency_cache (
       full_r <= 'b0;
     else
       full_r <= full_w;
-      
-  // ------------------------------------------------------------------------ //
-  //
-  always_ff @(posedge clk)
-    if (rst)
-      table_vld_r <= '0;
-    else
-      table_vld_r <= table_vld_w;
   
   // ------------------------------------------------------------------------ //
   //
-  always_ff @(posedge clk)
+  always_ff @(posedge clk) begin
     for (int i = 0; i < N; i++)
-      if (table_en [i])
+      if (rst)
+        table_r [i].vld <= 'b0;
+      else if (table_en [i])
         table_r [i] <= table_w [i];
+  end
   
   // ------------------------------------------------------------------------ //
   //
