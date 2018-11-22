@@ -33,7 +33,6 @@ package rmw_long_latency_pkg;
   //
   typedef logic [15:0] id_t;
   typedef logic [31:0] word_t;
-  typedef logic [5:0]  tag_t;
 
   //
   typedef enum logic [1:0] {  OP_NOP   = 2'b00,
@@ -49,8 +48,24 @@ package rmw_long_latency_pkg;
     op_t op;
   } issue_t;
 
+  // The number of commands that may be enqueued. Typically around the
+  // lookup latency.
+  //
   localparam int N  = 64;
 
+  // The maximum number of concurrent in flight commands to TBL.
+  //
+  localparam int IN_FLIGHT_N  = 16;
+  localparam int TAG_W  = $clog2(IN_FLIGHT_N);
+  typedef logic [TAG_W-1:0] tag_t;
+
+  function tag_t clz_tag(logic [IN_FLIGHT_N - 1:0] n); begin
+    clz_tag = '0;
+    for (int i = IN_FLIGHT_N - 1; i >= 0; i--)
+      if (!n [i])
+        clz_tag  = tag_t'(i);
+  end endfunction
+  
   //
   localparam int PTR_W  = $clog2(N);
   typedef logic [PTR_W-1:0] ptr_t;

@@ -29,6 +29,7 @@
 #include <map>
 #include <deque>
 #include <vector>
+#include <sstream>
 
 #include "vobj/Vrmw_long_latency.h"
 typedef Vrmw_long_latency uut_t;
@@ -73,8 +74,8 @@ struct TblMem : sc_core::sc_module {
   sc_core::sc_out<uint32_t> tbl_rd_ctag_r;
   
   SC_HAS_PROCESS(TblMem);
-  TblMem(std::size_t latency = 16) :
-    sc_core::sc_module("TblMem")
+  TblMem(sc_core::sc_module_name mn = "TblMem", std::size_t latency = 16) :
+    sc_core::sc_module(mn)
 #define __construct_ports(__name, __type)       \
     , __name(#__name)
     PORTS_TABLE(__construct_ports)
@@ -85,7 +86,7 @@ struct TblMem : sc_core::sc_module {
     , latency_(latency)
   {
     SC_METHOD(m_on_cycle);
-    sensitive << clk.posedge_event();
+    sensitive << clk.pos();
     dont_initialize();
   }
   // Backdoor access
@@ -163,7 +164,17 @@ struct Issue {
   uint32_t op;
   uint32_t imm;
   uint32_t id;
+  std::string to_string() const {
+    std::stringstream ss;
+    ss << "OP: " << op
+       << " IMM: 0x" << std::hex << imm
+       << " ID:" << std::dec << id;
+    return ss.str();
+  }
 };
+std::ostream & operator<<(std::ostream & os, const Issue & issue) {
+  return os << issue.to_string();
+}
 
 template<typename Addr, typename Data>
 struct MachineModel {
@@ -223,6 +234,11 @@ struct RmwLongLatencyTb : libtb2::Top<uut_t> {
     PORTS_TABLE(__bind_signals)
 #undef __bind_signals
 
+    sampler_.clk(clk_);
+    //
+    resetter_.clk(clk_);
+    resetter_.rst(rst_);
+
     initialize_stimulus(opts_);
 
     SC_THREAD(t_run);
@@ -230,6 +246,9 @@ struct RmwLongLatencyTb : libtb2::Top<uut_t> {
     SC_METHOD(m_check_completion);
     sensitive << clk_.posedge_event();
     dont_initialize();
+
+    register_uut(uut_);
+    vcd_on();
   }
 private:
   void initialize_stimulus(TbOptions opts) {
@@ -262,6 +281,7 @@ private:
       iss.op = *cmd;
       iss.imm = *imm_c.p;
       iss.id = *idptr;
+      stimulus_.push_back(iss);
 
       // Advance
       cmd->next();
@@ -272,6 +292,10 @@ private:
   void t_run() {
     scv_smart_ptr<uint32_t> initptr;
 
+    resetter_.wait_reset_done();
+
+    wait_cycles(10);
+    
     // Initialize machine state
     for (std::size_t i = 0; i < valid_id_.size(); i++, initptr->next()) {
       Issue issue;
@@ -282,12 +306,14 @@ private:
       rtl_issue(issue);
     }
 
-    wait(100, SC_NS);
+    wait_cycles(10);
 
     // Run random stimulus
     for (std::size_t i = 0; i < stimulus_.size(); i++)
       rtl_issue(stimulus_[i]);
 
+    wait_cycles(10);
+    
     // Done
     sc_core::sc_stop();
   }
@@ -295,6 +321,11 @@ private:
     if (cmpl_vld_r_) {
       const uint32_t expected = expected_.front();
       const uint32_t actual = cmpl_word_r_;
+
+      if (actual != expected) {
+        LOGGER(ERROR) << "Mismatch on: actual = " << actual
+                      << " expected = " << expected;
+      }
 
 
       expected_.pop_front();
@@ -305,9 +336,14 @@ private:
     iss_op_r_ = issue.op;
     iss_id_r_ = issue.id;
     iss_imm_r_ = issue.imm;
-    wait(clk_.posedge_event());
+    do { wait(clk_.negedge_event()); } while (!iss_rdy_w_);
+    LOGGER(DEBUG) << "Issue: " << issue << "\n";
     expected_.push_back(mm_.apply(issue));
     iss_vld_r_ = false;
+  }
+  void wait_cycles(std::size_t n = 1) {
+    while (n--)
+      wait(clk_.negedge_event());
   }
   std::vector<uint32_t> valid_id_;
   std::vector<Issue> stimulus_;
@@ -319,6 +355,8 @@ private:
   PORTS(__declare_signal)
   PORTS_TABLE(__declare_signal)
 #undef __declare_signal
+  libtb2::Resetter resetter_;
+  libtb2::Sampler sampler_;
   MachineModel<uint32_t, uint32_t> mm_;
   TblMem<uint32_t, uint32_t> tbl_;
   TbOptions opts_;
@@ -327,7 +365,10 @@ private:
 SC_MODULE_EXPORT(RmwLongLatencyTb);
 
 int sc_main(int argc, char **argv) {
-  RmwLongLatencyTb tb;
+  TbOptions opts;
+  opts.id_n = 1;
+  opts.n = 10;
+  RmwLongLatencyTb tb(opts);
   return libtb2::Sim::start(argc, argv);
 }
 

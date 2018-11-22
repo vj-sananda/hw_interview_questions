@@ -167,6 +167,24 @@ module rmw_long_latency_cache (
   word_t                                exe_iss_imm_w;
   op_t                                  exe_iss_op_w;
   word_t                                exe_iss_reg_w;
+  //
+  logic                                 tbl_wr_w;
+  id_t                                  tbl_wr_id_w;
+  word_t                                tbl_wr_word_w;
+  //
+  logic                                 tbl_rd_w;
+  id_t                                  tbl_rd_id_w;
+  tag_t                                 tbl_rd_itag_w;
+  //
+  logic                                 tbl_flm__alloc_vld;
+  tag_t                                 tbl_flm__alloc_id;
+  logic                                 tbl_flm__free_vld;
+  tag_t                                 tbl_flm__free_id;
+  logic                                 tbl_flm__clear;
+  logic                                 tbl_flm__idle_r;
+  logic                                 tbl_flm__busy_r;
+  logic [IN_FLIGHT_N - 1:0]             tbl_flm__state_w;
+  logic [IN_FLIGHT_N - 1:0]             tbl_flm__state_r;
 
   // ======================================================================== //
   //                                                                          //
@@ -271,6 +289,23 @@ module rmw_long_latency_cache (
       retire_ptr_en  = '0;
 
     end // block: ptr_PROC
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : tbl_PROC
+
+      //
+      tbl_wr_w       = 'b0;
+      tbl_wr_id_w    = '0;
+      tbl_wr_word_w  = '0;
+
+      //
+      tbl_rd_w       = '0;
+      tbl_rd_id_w    = '0;
+      tbl_rd_itag_w  = '0;
+
+    end // block: tbl_PROC
   
   // ------------------------------------------------------------------------ //
   //
@@ -380,5 +415,64 @@ module rmw_long_latency_cache (
       exe_iss_reg_r <= exe_iss_reg_w;
     end
   
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      tbl_wr_r <= 'b0;
+    else
+      tbl_wr_r <= tbl_wr_w;
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (tbl_wr_w) begin
+      tbl_wr_id_r   <= tbl_wr_id_w;
+      tbl_wr_word_r <= tbl_wr_word_w;
+    end
 
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      tbl_rd_r <= 'b0;
+    else
+      tbl_rd_r <= tbl_rd_w;
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (tbl_rd_w) begin
+      tbl_rd_id_r   <= tbl_rd_id_w;
+      tbl_rd_itag_r <= tbl_rd_itag_w;
+    end
+  
+  // ======================================================================== //
+  //                                                                          //
+  // Instantiations                                                           //
+  //                                                                          //
+  // ======================================================================== //
+  
+  // ------------------------------------------------------------------------ //
+  //
+  flm #(.N(IN_FLIGHT_N)) u_tbl_flm (
+    //
+      .clk               (clk                )
+    , .rst               (rst                )
+    //
+    , .alloc_vld         (tbl_flm__alloc_vld )
+    , .alloc_id          (tbl_flm__alloc_id  )
+    //
+    , .free_vld          (tbl_flm__free_vld  )
+    , .free_id           (tbl_flm__free_id   )
+    //
+    , .clear             (tbl_flm__clear     )
+    //
+    , .idle_r            (tbl_flm__idle_r    )
+    , .busy_r            (tbl_flm__busy_r    )
+    //
+    , .state_w           (tbl_flm__state_w   )
+    , .state_r           (tbl_flm__state_r   )
+  );
+  
 endmodule
