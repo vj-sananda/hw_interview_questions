@@ -1,5 +1,5 @@
 ##========================================================================== //
-## Copyright (c) 2016-2018, Stephen Henry
+## Copyright (c) 2016, Stephen Henry
 ## All rights reserved.
 ##
 ## Redistribution and use in source and binary forms, with or without
@@ -25,5 +25,4 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##========================================================================== //
 
-add_subdirectory(sorted_lists)
-add_subdirectory(rmw_long_latency)
+emit_answer(tb_rmw_long_latency rmw_long_latency.sv rmw_long_latency.cpp)
