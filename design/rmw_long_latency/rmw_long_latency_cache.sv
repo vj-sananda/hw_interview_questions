@@ -107,8 +107,6 @@ module rmw_long_latency_cache (
   //
   table_t                               alloc_table;
   table_t                               issue_table;
-  table_t                               cmpl_table;
-  table_t                               retire_table;
   //
   logic [N-1:0]                         tbl_rd_capture;
   logic [N-1:0]                         tbl_id_hit_d;
@@ -123,35 +121,23 @@ module rmw_long_latency_cache (
   ptr_t                                 issue_ptr_w;
   logic                                 issue_ptr_en;
   //
-  ptr_t                                 cmpl_ptr_r;
-  ptr_t                                 cmpl_ptr_w;
-  logic                                 cmpl_ptr_en;
-  //
-  ptr_t                                 retire_ptr_r;
-  ptr_t                                 retire_ptr_w;
-  logic                                 retire_ptr_en;
-  //
   ptr_t                                 alloc_adv_d;
   ptr_t                                 issue_adv_d;
-  ptr_t                                 cmpl_adv_d;
-  ptr_t                                 retire_adv_d;
   //
   logic                                 alloc_adv;
   logic                                 issue_adv;
-  logic                                 cmpl_adv;
-  logic                                 retire_adv;
+  logic                                 exe_wrbk_bypass;
   //
   logic                                 exe_wrbk_r;
-  logic                                 exe_wrbk_bypass_r;
   word_t                                exe_wrbk_word_r;
   momento_t                             exe_wrbk_momento_r;
   //
-  logic                                 exe_wrbk_bypass_w;
   //
   logic                                 exe_iss_vld_w;
   word_t                                exe_iss_imm_w;
   op_t                                  exe_iss_op_w;
   word_t                                exe_iss_reg_w;
+  momento_t                             exe_iss_momento_w;
   //
   logic                                 tbl_wr_w;
   id_t                                  tbl_wr_id_w;
@@ -178,8 +164,6 @@ module rmw_long_latency_cache (
       //
       alloc_table   = table_mux_N(table_r, alloc_ptr_r);
       issue_table   = table_mux_N(table_r, issue_ptr_r);
-      cmpl_table    = table_mux_N(table_r, cmpl_ptr_r);
-      retire_table  = table_mux_N(table_r, retire_ptr_r);
 
     end // block: table_ptr_PROC
   
@@ -190,11 +174,11 @@ module rmw_long_latency_cache (
 
       //
       for (int i = 0; i < N; i++)
-        tbl_id_hit_d [i]  = table_r [i].vld & (table_r [i].issue.id == iss_r.id);
+        tbl_id_hit_d [i]  = iss_vld_r & table_r [i].vld & (table_r [i].issue.id == iss_r.id);
 
       //
       tbl_id_hit          = (tbl_id_hit_d != '0);
-      tbl_id_hit_tag      = enc_ptr(pri_ptr(shift_back(tbl_id_hit_d, alloc_ptr_r)));
+      tbl_id_hit_tag      = enc_ptr(pri_ptr(ror_n(tbl_id_hit_d, alloc_ptr_r)));
 
       for (int i = 0; i < N; i++) begin
 
@@ -214,18 +198,7 @@ module rmw_long_latency_cache (
             table_w [i].issue  = iss_r;
             table_w [i].tag    = tbl_id_hit ? tbl_id_hit_tag : tag_t'(i);
           end
-          // Tbl-Lookup
-          // Bypass
-          // Exe-Issue
           issue_ptr_r [i]: begin
-          end
-          // Exe-Writeback
-          cmpl_ptr_r [i]: begin
-            table_w [i].state  = ST_COMPLETE;
-            table_w [i].word   = exe_wrbk_word_r;
-          end
-          // Tbl-Writeback (Retire)
-          retire_ptr_r [i]: begin
             table_w [i].vld  = 'b0;
           end
           default: begin
@@ -243,14 +216,16 @@ module rmw_long_latency_cache (
         end
 
         //
-        table_en [i]  = '0;
-        table_en [i] |= alloc_adv_d [i];
-        table_en [i] |= issue_adv_d [i];
-        table_en [i] |= cmpl_adv_d [i];
-        table_en [i] |= retire_adv_d [i];
-        table_en [i] |= tbl_rd_capture [i];
+        table_w [i].killwrbk  = tbl_id_hit_d [i];
 
-        end // for (int i = 0; i < N; i++)
+        //
+        table_en [i]          = '0;
+        table_en [i]         |= alloc_adv_d [i];
+        table_en [i]         |= issue_adv_d [i];
+        table_en [i]         |= tbl_rd_capture [i];
+        table_en [i]         |= tbl_id_hit_d [i];
+
+        end // for (int i     = 0; i < N; i++)
 
     end // block: table_PROC
   
@@ -260,38 +235,31 @@ module rmw_long_latency_cache (
     begin : cntrl_PROC
 
       //
-      iss_rdy_w     = 1'b1;
+      iss_rdy_w        = 1'b1;
+      exe_wrbk_bypass  = exe_wrbk_w & (issue_table.issue.id == exe_wrbk_momento_w.id);
 
       //
-      alloc_adv     = (iss_vld_r & iss_rdy_w);
-      issue_adv     = issue_table.vld & (issue_table.state == ST_RDY);
-      cmpl_adv      = exe_wrbk_r;
-      retire_adv    = retire_table.vld & (retire_table.state == ST_COMPLETE);
+      alloc_adv        = (iss_vld_r & iss_rdy_w);
+
+      //
+      casez ({issue_table.vld, issue_table.state, exe_wrbk_bypass})
+        {1'b1, ST_RDY, 1'b?}:          issue_adv  = 'b1;
+        {1'b1, ST_AWAIT_BYPASS, 1'b1}: issue_adv  = 'b1;
+        default:                       issue_adv  = 'b0;
+      endcase // casez ({issue_table.vld, issue_table.state})
       
       //
-      alloc_adv_d   = alloc_adv ? alloc_ptr_r : '0;
-      issue_adv_d   = issue_adv ? issue_ptr_r : '0;
-      cmpl_adv_d    = cmpl_adv ? cmpl_ptr_r : '0;
-      retire_adv_d  = retire_adv ? retire_ptr_r : '0;
+      alloc_adv_d  = alloc_adv ? alloc_ptr_r : '0;
+      issue_adv_d  = issue_adv ? issue_ptr_r : '0;
+
+      //
+      exe_iss_vld_w      = issue_adv;
+      exe_iss_imm_w      = issue_table.issue.imm;
+      exe_iss_op_w       = issue_table.issue.op;
+      exe_iss_momento_w  = issue_table.issue.id;
+      exe_iss_reg_w      = exe_wrbk_bypass ? exe_wrbk_word_w : issue_table.word;
 
     end // block: cntrl_PROC
-
-  // ------------------------------------------------------------------------ //
-  //
-  always_comb
-    begin : bypass_PROC
-      
-      //
-//      exe_wrbk_bypass_w  = issue_table.vld &
-//                            (issue_table.issue.id == table_cmpl.issue.id);
-
-      //
-      exe_iss_vld_w     = issue_adv;
-      exe_iss_imm_w     = issue_table.issue.imm;
-      exe_iss_op_w      = issue_table.issue.op;
-      exe_iss_reg_w     = exe_wrbk_bypass_w ? exe_wrbk_word_w : issue_table.word;
-
-    end // block: bypass_PROC
   
   // ------------------------------------------------------------------------ //
   //
@@ -299,14 +267,14 @@ module rmw_long_latency_cache (
     begin : tbl_PROC
 
       //
-      tbl_wr_w       = retire_adv;
-      tbl_wr_id_w    = retire_table.issue.id;
-      tbl_wr_word_w  = retire_table.word;
+      tbl_wr_w       = exe_wrbk_r;
+      tbl_wr_id_w    = exe_wrbk_momento_r.id;
+      tbl_wr_word_w  = exe_wrbk_word_r;
 
       //
-      tbl_rd_w       = alloc_adv & op_requires_tbl_lkup(iss_r.op);
+      tbl_rd_w       = alloc_adv & op_requires_tbl_lkup(iss_r.op) & (~tbl_id_hit);
       tbl_rd_id_w    = iss_r.id;
-      tbl_rd_itag_w  = encode_ptr(alloc_ptr_r);
+      tbl_rd_itag_w  = enc_ptr(alloc_ptr_r);
 
     end // block: tbl_PROC
   
@@ -322,14 +290,6 @@ module rmw_long_latency_cache (
       //
       issue_ptr_w    = issue_adv ? advance_ptr(issue_ptr_r) : issue_ptr_r;
       issue_ptr_en   = issue_adv;
-      
-      //
-      cmpl_ptr_w     = cmpl_adv ? advance_ptr(cmpl_ptr_r) : cmpl_ptr_r;
-      cmpl_ptr_en    = cmpl_adv;
-      
-      //
-      retire_ptr_w   = retire_adv ? advance_ptr(retire_ptr_r) : retire_ptr_r;
-      retire_ptr_en  = retire_adv;
 
     end // block: ptr_PROC
   
@@ -362,7 +322,6 @@ module rmw_long_latency_cache (
   //
   always_ff @(posedge clk)
     if (exe_wrbk_w) begin
-      exe_wrbk_bypass_r  <= exe_wrbk_bypass_w;
       exe_wrbk_word_r    <= exe_wrbk_word_w;
       exe_wrbk_momento_r <= exe_wrbk_momento_w;
     end
@@ -382,22 +341,6 @@ module rmw_long_latency_cache (
       issue_ptr_r <= 'b1;
     else if (issue_ptr_en)
       issue_ptr_r <= issue_ptr_w;
-  
-  // ------------------------------------------------------------------------ //
-  //
-  always_ff @(posedge clk)
-    if (rst)
-      cmpl_ptr_r <= 'b1;
-    else if (cmpl_ptr_en)
-      cmpl_ptr_r <= cmpl_ptr_w;
-  
-  // ------------------------------------------------------------------------ //
-  //
-  always_ff @(posedge clk)
-    if (rst)
-      retire_ptr_r <= 'b1;
-    else if (retire_ptr_en)
-      retire_ptr_r <= retire_ptr_w;
   
   // ------------------------------------------------------------------------ //
   //

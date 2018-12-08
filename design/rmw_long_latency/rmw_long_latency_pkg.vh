@@ -114,7 +114,7 @@ package rmw_long_latency_pkg;
 
   //
   typedef struct packed {
-    logic        foo;
+    id_t        id;
   } momento_t;
   
 
@@ -124,14 +124,14 @@ package rmw_long_latency_pkg;
       table_mux_N |= {$bits(table_t){sel[i]}} & t[i];
   end endfunction
 
-  function n_t shift_back(n_t h, ptr_t p); begin
+  function n_t ror_n(n_t h, ptr_t p); begin
     n_t [1:0] a  = {h, h} >> enc_ptr(p);
-    shift_back   = a[0];
+    ror_n        = a[0];
   end endfunction
 
-  function n_t pri_ptr(n_t a); begin
+  function ptr_t pri_ptr(ptr_t a); begin
     pri_ptr  = '0;
-    for (int i = $left(n_t); i >= $right(n_t); i--)
+    for (int i = $left(ptr_t); i >= $right(ptr_t); i--)
       if (a [i])
         pri_ptr  = ('b1 << i);
   end endfunction
