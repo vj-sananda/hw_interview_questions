@@ -42,8 +42,8 @@ package rmw_long_latency_pkg;
                             } op_t;
 
   //
-  function logic op_requires_tbl(op_t op); begin
-    op_requires_tbl  = ((op == OP_ADDI) || (op == OP_SUBI));
+  function logic op_requires_tbl_lkup(op_t op); begin
+    op_requires_tbl_lkup  = (op != OP_MOVI);
   end endfunction
 
   //
@@ -60,8 +60,10 @@ package rmw_long_latency_pkg;
 
   typedef logic [N - 1:0] n_t;
 
+
   // The maximum number of concurrent in flight commands to TBL.
   //
+/* -----\/----- EXCLUDED -----\/-----
   localparam int IN_FLIGHT_N  = 16;
   localparam int TAG_W  = $clog2(IN_FLIGHT_N);
   typedef logic [TAG_W-1:0] tag_t;
@@ -72,13 +74,67 @@ package rmw_long_latency_pkg;
       if (!n [i])
         clz_tag  = tag_t'(i);
   end endfunction
+ -----/\----- EXCLUDED -----/\----- */
   
   //
-  localparam int PTR_W  = $clog2(N);
+  typedef logic [N-1:0] ptr_t;
+  typedef logic [$clog2(N)-1:0] tag_t;
+  
+  function ptr_t advance_ptr(ptr_t p); begin
+    if (p [$left(ptr_t)])
+      advance_ptr  = 'b1;
+    else
+      advance_ptr  = (p << 1);
+  end endfunction
+
+  function tag_t enc_ptr(ptr_t p); begin
+    enc_ptr  = '0;
+    for (int i = $bits(ptr_t) - 1; i >= 0; i--)
+      if (p [i])
+        enc_ptr  = tag_t'(i);
+  end endfunction
+    
+
+  //
+  typedef enum logic [1:0] {  ST_RDY           = 2'b00,
+                              ST_AWAIT_BYPASS  = 2'b01,
+                              ST_AWAIT_TAG     = 2'b10,
+                              ST_COMPLETE      = 2'b11
+                              } state_t;
+
+  //
   typedef struct packed {
-    logic             x;
-    logic [PTR_W-1:0] p;
-  } ptr_t;
+    logic        vld;
+    state_t      state;
+    issue_t      issue;
+    tag_t        tag;
+    word_t       word;
+    logic        killwrbk;
+  } table_t;
+
+  //
+  typedef struct packed {
+    logic        foo;
+  } momento_t;
+  
+
+  function table_t table_mux_N(table_t [N-1:0] t, logic [N-1:0] sel); begin
+    table_mux_N  = '0;
+    for (int i = 0; i < N; i++)
+      table_mux_N |= {$bits(table_t){sel[i]}} & t[i];
+  end endfunction
+
+  function n_t shift_back(n_t h, ptr_t p); begin
+    n_t [1:0] a  = {h, h} >> enc_ptr(p);
+    shift_back   = a[0];
+  end endfunction
+
+  function n_t pri_ptr(n_t a); begin
+    pri_ptr  = '0;
+    for (int i = $left(n_t); i >= $right(n_t); i--)
+      if (a [i])
+        pri_ptr  = ('b1 << i);
+  end endfunction
 
 endpackage // rmw_long_latency_pkg
 

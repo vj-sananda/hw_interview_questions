@@ -92,9 +92,11 @@ module rmw_long_latency (
   word_t                              exe_iss_imm_r;
   op_t                                exe_iss_op_r;
   word_t                              exe_iss_reg_r;
+  momento_t                           exe_iss_momento_r;
   //
   logic                               exe_wrbk_w;
   word_t                              exe_wrbk_word_w;
+  momento_t                           exe_wrbk_momento_w;
 
   // ======================================================================== //
   //                                                                          //
@@ -120,7 +122,8 @@ module rmw_long_latency (
     begin : exe_PROC
 
       //
-      exe_wrbk_w  = exe_iss_vld_r;
+      exe_wrbk_w          = exe_iss_vld_r;
+      exe_wrbk_momento_w  = exe_iss_momento_r;
 
       //
       case (exe_iss_op_r)
@@ -180,9 +183,11 @@ module rmw_long_latency (
     , .exe_iss_imm_r     (exe_iss_imm_r      )
     , .exe_iss_op_r      (exe_iss_op_r       )
     , .exe_iss_reg_r     (exe_iss_reg_r      )
+    , .exe_iss_momento_r (exe_iss_momento_r  )
     //
     , .exe_wrbk_w        (exe_wrbk_w         )
     , .exe_wrbk_word_w   (exe_wrbk_word_w    )
+    , .exe_wrbk_momento_w(exe_wrbk_momento_w )
   );
 
 endmodule // rmw_long_latency

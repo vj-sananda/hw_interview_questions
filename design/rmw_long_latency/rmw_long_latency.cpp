@@ -306,7 +306,7 @@ private:
       rtl_issue(issue);
     }
 
-    wait_cycles(10);
+    wait_cycles(100);
 
     // Run random stimulus
     for (std::size_t i = 0; i < stimulus_.size(); i++)
@@ -323,11 +323,10 @@ private:
       const uint32_t actual = cmpl_word_r_;
 
       if (actual != expected) {
-        LOGGER(ERROR) << "Mismatch on: actual = " << actual
-                      << " expected = " << expected;
+        LOGGER(ERROR) << "Mismatch on: actual = 0x" << std::hex << actual
+                      << " expected = 0x" << std::hex << expected
+                      << "\n";
       }
-
-
       expected_.pop_front();
     }
   }
@@ -336,10 +335,12 @@ private:
     iss_op_r_ = issue.op;
     iss_id_r_ = issue.id;
     iss_imm_r_ = issue.imm;
-    do { wait(clk_.negedge_event()); } while (!iss_rdy_w_);
+    do { wait_cycles(); } while (!iss_rdy_w_);
     LOGGER(DEBUG) << "Issue: " << issue << "\n";
     expected_.push_back(mm_.apply(issue));
     iss_vld_r_ = false;
+
+    wait_cycles(100);
   }
   void wait_cycles(std::size_t n = 1) {
     while (n--)
@@ -367,7 +368,7 @@ SC_MODULE_EXPORT(RmwLongLatencyTb);
 int sc_main(int argc, char **argv) {
   TbOptions opts;
   opts.id_n = 1;
-  opts.n = 10;
+  opts.n = 100;
   RmwLongLatencyTb tb(opts);
   return libtb2::Sim::start(argc, argv);
 }

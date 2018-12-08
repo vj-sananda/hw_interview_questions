@@ -59,7 +59,7 @@ module rmw_long_latency_cache (
 
    //
    , output                                  cmpl_vld_r
-   , input rmw_long_latency_pkg::word_t      cmpl_word_r
+   , output rmw_long_latency_pkg::word_t     cmpl_word_r
 
    //======================================================================== //
    //                                                                         //
@@ -91,56 +91,37 @@ module rmw_long_latency_cache (
    , output rmw_long_latency_pkg::word_t     exe_iss_imm_r
    , output rmw_long_latency_pkg::op_t       exe_iss_op_r
    , output rmw_long_latency_pkg::word_t     exe_iss_reg_r
+   , output rmw_long_latency_pkg::momento_t  exe_iss_momento_r
 
    //
    , input logic                             exe_wrbk_w
    , input rmw_long_latency_pkg::word_t      exe_wrbk_word_w
+   , input rmw_long_latency_pkg::momento_t   exe_wrbk_momento_w
 );
   import rmw_long_latency_pkg::*;
 
-  typedef enum logic [1:0] {  OP_RDY           = 2'b00,
-                              OP_AWAIT_BYPASS  = 2'b01,
-                              OP_AWAIT_TAG     = 2'b10
-                            } state_t;
-  
-  
-  //
-  typedef struct packed {
-    logic                     vld;
-    state_t                   state;
-    issue_t                   issue;
-    tag_t                     tag;
-    ptr_t                     byptr;
-    word_t                    word;
-  } table_t;
-
-  //
-  table_t                               table_issue;
   //
   table_t [N - 1:0]                     table_r;
   table_t [N - 1:0]                     table_w;
   logic [N - 1:0]                       table_en;
   //
-  table_t                               table_alloc;
-  table_t                               table_iss;
-  table_t                               table_cmpl;
-  table_t                               table_retire;
+  table_t                               alloc_table;
+  table_t                               issue_table;
+  table_t                               cmpl_table;
+  table_t                               retire_table;
   //
-  logic [N - 1:0]                       table_issue_vld;
-  logic [N - 1:0]                       table_rd_ctag_vld;
-  logic [N - 1:0]                       table_bypass_vld;
-  logic [N - 1:0]                       table_retire_vld;
-
+  logic [N-1:0]                         tbl_rd_capture;
+  logic [N-1:0]                         tbl_id_hit_d;
+  logic                                 tbl_id_hit;
+  tag_t                                 tbl_id_hit_tag;
   //
   ptr_t                                 alloc_ptr_r;
   ptr_t                                 alloc_ptr_w;
   logic                                 alloc_ptr_en;
   //
-  n_t                                   alloc_ptr_d;
-  //
-  ptr_t                                 iss_ptr_r;
-  ptr_t                                 iss_ptr_w;
-  logic                                 iss_ptr_en;
+  ptr_t                                 issue_ptr_r;
+  ptr_t                                 issue_ptr_w;
+  logic                                 issue_ptr_en;
   //
   ptr_t                                 cmpl_ptr_r;
   ptr_t                                 cmpl_ptr_w;
@@ -150,17 +131,20 @@ module rmw_long_latency_cache (
   ptr_t                                 retire_ptr_w;
   logic                                 retire_ptr_en;
   //
+  ptr_t                                 alloc_adv_d;
+  ptr_t                                 issue_adv_d;
+  ptr_t                                 cmpl_adv_d;
+  ptr_t                                 retire_adv_d;
+  //
   logic                                 alloc_adv;
-  logic                                 iss_adv;
+  logic                                 issue_adv;
   logic                                 cmpl_adv;
   logic                                 retire_adv;
-  //
-  logic                                 full_w;
-  logic                                 full_r;
   //
   logic                                 exe_wrbk_r;
   logic                                 exe_wrbk_bypass_r;
   word_t                                exe_wrbk_word_r;
+  momento_t                             exe_wrbk_momento_r;
   //
   logic                                 exe_wrbk_bypass_w;
   //
@@ -173,24 +157,12 @@ module rmw_long_latency_cache (
   id_t                                  tbl_wr_id_w;
   word_t                                tbl_wr_word_w;
   //
-  logic                                 tbl_bypass;
-  ptr_t                                 tbl_bypass_ptr;
-  //
   logic                                 tbl_rd_w;
   id_t                                  tbl_rd_id_w;
   tag_t                                 tbl_rd_itag_w;
   //
-  logic                                 tbl_flm__alloc_vld;
-  tag_t                                 tbl_flm__alloc_id;
-  logic                                 tbl_flm__free_vld;
-  tag_t                                 tbl_flm__free_id;
-  logic                                 tbl_flm__clear;
-  logic                                 tbl_flm__idle_r;
-  logic                                 tbl_flm__busy_r;
-  logic [IN_FLIGHT_N - 1:0]             tbl_flm__state_w;
-  logic [IN_FLIGHT_N - 1:0]             tbl_flm__state_r;
-  //
-  tag_t                                 iss_tag;
+  logic                                 cmpl_vld_w;
+  word_t                                cmpl_word_w;
 
   // ======================================================================== //
   //                                                                          //
@@ -204,13 +176,10 @@ module rmw_long_latency_cache (
     begin : table_ptr_PROC
 
       //
-      table_alloc   = table_r [alloc_ptr_r.p];
-      table_iss     = table_r [iss_ptr_r.p];
-      table_cmpl    = table_r [cmpl_ptr_r.p];
-      table_retire  = table_r [retire_ptr_r.p];
-
-      //
-      iss_tag       = clz_tag(tbl_flm__state_r);
+      alloc_table   = table_mux_N(table_r, alloc_ptr_r);
+      issue_table   = table_mux_N(table_r, issue_ptr_r);
+      cmpl_table    = table_mux_N(table_r, cmpl_ptr_r);
+      retire_table  = table_mux_N(table_r, retire_ptr_r);
 
     end // block: table_ptr_PROC
   
@@ -220,164 +189,161 @@ module rmw_long_latency_cache (
     begin : table_PROC
 
       //
-      table_issue        = '0;
-      table_issue.issue  = iss_r;
+      for (int i = 0; i < N; i++)
+        tbl_id_hit_d [i]  = table_r [i].vld & (table_r [i].issue.id == iss_r.id);
 
       //
-      table_en           = '0;
-      table_rd_ctag_vld  = '0;
-      table_bypass_vld   = '0;
-      
+      tbl_id_hit          = (tbl_id_hit_d != '0);
+      tbl_id_hit_tag      = enc_ptr(pri_ptr(shift_back(tbl_id_hit_d, alloc_ptr_r)));
+
       for (int i = 0; i < N; i++) begin
 
         //
-        casez ({table_r [i].vld, iss_vld_r, iss_rdy_w, alloc_ptr_d [i]})
-          4'b0_111: table_issue_vld [i]  = 'b1;
-          default:  table_issue_vld [i]  = 'b0;
-        endcase // casez ({})
-
-        //
-        casez ({table_r [i].vld, tbl_rd_word_vld_r})
-          2'b1_1:  table_rd_ctag_vld [i]  = (table_r [i].tag == tbl_rd_ctag_r);
-          default: table_rd_ctag_vld [i]  = 'b0;
-        endcase // casez ({})
-        
-        //
-        casez ({table_r [i].vld, exe_wrbk_r})
-          2'b1_1:  table_bypass_vld [i]  = (table_r [i].byptr == cmpl_ptr_r);
-          default: table_bypass_vld [i]  = 'b0;
-        endcase // casez ({})
-
-        //
-        table_retire_vld [i] = '0;
-
-        //
-        table_w [i]       = table_r [i];
+        table_w [i]  = table_r [i];
         
         //
         unique0 case (1'b1)
-          table_issue_vld [i]: begin
-            table_w [i].vld      = 'b1;
-            table_w [i].state    = tbl_rd_w ? OP_AWAIT_BYPASS : OP_AWAIT_TAG;
-            table_w [i].tag      = iss_tag;
-            table_w [i].byptr    = tbl_bypass_ptr;
+          // Allocation
+          alloc_ptr_r [i]: begin
+            table_w [i].vld    = 'b1;
+            casez ({op_requires_tbl_lkup(iss_r.op), tbl_id_hit})
+              2'b10:   table_w [i].state  = ST_AWAIT_TAG;
+              2'b11:   table_w [i].state  = ST_AWAIT_BYPASS;
+              default: table_w [i].state  = ST_RDY;
+            endcase // casez ({op_requires_tbl(iss_r.op)})
+            table_w [i].issue  = iss_r;
+            table_w [i].tag    = tbl_id_hit ? tbl_id_hit_tag : tag_t'(i);
           end
-          table_rd_ctag_vld [i]: begin
-            table_w [i].state  = OP_RDY;
-            table_w [i].word   = tbl_rd_word_r;
+          // Tbl-Lookup
+          // Bypass
+          // Exe-Issue
+          issue_ptr_r [i]: begin
           end
-          table_bypass_vld [i]: begin
-            table_w [i].state  = OP_RDY;
+          // Exe-Writeback
+          cmpl_ptr_r [i]: begin
+            table_w [i].state  = ST_COMPLETE;
             table_w [i].word   = exe_wrbk_word_r;
           end
-          table_retire_vld [i]: begin
+          // Tbl-Writeback (Retire)
+          retire_ptr_r [i]: begin
             table_w [i].vld  = 'b0;
           end
+          default: begin
+            table_w [i]  = table_r [i];
+          end
         endcase // unique0 case (1'b1)
-        
-        //
-        table_en [i]  = (table_rd_ctag_vld [i] | table_bypass_vld [i]);
 
-      end // for (int i = 0; i < N; i++)
+        //
+        tbl_rd_capture [i]  = tbl_rd_word_vld_r & (table_r [i].tag == tbl_rd_ctag_r);
+
+        //
+        if (tbl_rd_capture [i]) begin
+          table_w [i].state  = ST_RDY;
+          table_w [i].word   = tbl_rd_word_r;
+        end
+
+        //
+        table_en [i]  = '0;
+        table_en [i] |= alloc_adv_d [i];
+        table_en [i] |= issue_adv_d [i];
+        table_en [i] |= cmpl_adv_d [i];
+        table_en [i] |= retire_adv_d [i];
+        table_en [i] |= tbl_rd_capture [i];
+
+        end // for (int i = 0; i < N; i++)
 
     end // block: table_PROC
   
   // ------------------------------------------------------------------------ //
   //
-  function ptr_t inc(ptr_t p); begin
-    inc  = p;
-    if (p == ptr_t'(N - 1)) begin
-      inc.x  = ~inc.x;
-      inc.p  = '0;
-    end else begin
-      inc.p  = p.p + 'b1;
-    end
-  end endfunction
-
-  //
-  function logic is_full (ptr_t a, ptr_t b); begin
-    is_full  = (a.x ^ b.x) & (a.p == b.p);
-  end endfunction
-
-  //
-  function n_t lr (n_t n, ptr_t p); begin
-    n_t [1:0] n_extended  = ({n, n} >> p);
-    lr                    = n_extended[0];
-  end endfunction
-
-  //
-  function n_t table_match_on_id (id_t id); begin
-    for (int i = 0; i < N; i++)
-      table_vld [i]  = table_r [i].vld & (table_r [i].issue.id == id);
-  end endfunction
-
-  //
   always_comb
-    begin : ptr_PROC
+    begin : cntrl_PROC
 
       //
-      iss_rdy_w       = (~full_r);
+      iss_rdy_w     = 1'b1;
 
       //
-      alloc_adv       = iss_vld_r & iss_rdy_w;
-      iss_adv         = '0;
-      cmpl_adv        = '0;
-      retire_adv      = '0;
+      alloc_adv     = (iss_vld_r & iss_rdy_w);
+      issue_adv     = issue_table.vld & (issue_table.state == ST_RDY);
+      cmpl_adv      = exe_wrbk_r;
+      retire_adv    = retire_table.vld & (retire_table.state == ST_COMPLETE);
       
       //
-      alloc_ptr_w     = alloc_adv ? inc(alloc_ptr_r) : alloc_ptr_r;
-      alloc_ptr_en    = alloc_adv;
+      alloc_adv_d   = alloc_adv ? alloc_ptr_r : '0;
+      issue_adv_d   = issue_adv ? issue_ptr_r : '0;
+      cmpl_adv_d    = cmpl_adv ? cmpl_ptr_r : '0;
+      retire_adv_d  = retire_adv ? retire_ptr_r : '0;
 
-      //
-      iss_ptr_w       = iss_adv ? inc(iss_ptr_r) : iss_ptr_r;
-      iss_ptr_en      = iss_adv;
-      
-      //
-      cmpl_ptr_w      = cmpl_adv ? inc(cmpl_ptr_r) : cmpl_ptr_r;
-      cmpl_ptr_en     = cmpl_adv;
-      
-      //
-      retire_ptr_w    = retire_adv ? inc(retire_ptr_r) : retire_ptr_r;
-      retire_ptr_en   = retire_adv;
-
-      //
-      alloc_ptr_d     = ('b1 << alloc_ptr_r);
-      
-      //
-      full_w          = is_full(alloc_ptr_w, retire_ptr_w);
-
-      //
-      tbl_wr_w        = 'b0;
-      tbl_wr_id_w     = '0;
-      tbl_wr_word_w   = '0;
-
-      //
-      tbl_bypass      = '0;
-      tbl_bypass_ptr  = '0;
-
-      //
-      tbl_rd_w        = alloc_adv & op_requires_tbl(iss_r.op) & (~tbl_bypass);
-      tbl_rd_id_w     = iss_r.id;
-      tbl_rd_itag_w   = iss_tag;
-
-    end // block: ptr_PROC
+    end // block: cntrl_PROC
 
   // ------------------------------------------------------------------------ //
   //
   always_comb
     begin : bypass_PROC
+      
+      //
+//      exe_wrbk_bypass_w  = issue_table.vld &
+//                            (issue_table.issue.id == table_cmpl.issue.id);
 
       //
-      exe_wrbk_bypass_w  = '0;
-
-      //
-      exe_iss_vld_w      = '0;
-      exe_iss_imm_w      = table_iss.issue.imm;
-      exe_iss_op_w       = table_iss.issue.op;
-      exe_iss_reg_w      = exe_wrbk_bypass_w ? exe_wrbk_word_w : table_iss.word;
+      exe_iss_vld_w     = issue_adv;
+      exe_iss_imm_w     = issue_table.issue.imm;
+      exe_iss_op_w      = issue_table.issue.op;
+      exe_iss_reg_w     = exe_wrbk_bypass_w ? exe_wrbk_word_w : issue_table.word;
 
     end // block: bypass_PROC
   
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : tbl_PROC
+
+      //
+      tbl_wr_w       = retire_adv;
+      tbl_wr_id_w    = retire_table.issue.id;
+      tbl_wr_word_w  = retire_table.word;
+
+      //
+      tbl_rd_w       = alloc_adv & op_requires_tbl_lkup(iss_r.op);
+      tbl_rd_id_w    = iss_r.id;
+      tbl_rd_itag_w  = encode_ptr(alloc_ptr_r);
+
+    end // block: tbl_PROC
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : ptr_PROC
+      
+      //
+      alloc_ptr_w    = alloc_adv ? advance_ptr(alloc_ptr_r) : alloc_ptr_r;
+      alloc_ptr_en   = alloc_adv;
+
+      //
+      issue_ptr_w    = issue_adv ? advance_ptr(issue_ptr_r) : issue_ptr_r;
+      issue_ptr_en   = issue_adv;
+      
+      //
+      cmpl_ptr_w     = cmpl_adv ? advance_ptr(cmpl_ptr_r) : cmpl_ptr_r;
+      cmpl_ptr_en    = cmpl_adv;
+      
+      //
+      retire_ptr_w   = retire_adv ? advance_ptr(retire_ptr_r) : retire_ptr_r;
+      retire_ptr_en  = retire_adv;
+
+    end // block: ptr_PROC
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_comb
+    begin : cmpl_PROC
+
+      //
+      cmpl_vld_w      = exe_wrbk_r;
+      cmpl_word_w     = exe_wrbk_word_r;
+
+    end // block: cmpl_PROC
+    
   // ======================================================================== //
   //                                                                          //
   // Sequential Logic                                                         //
@@ -396,15 +362,16 @@ module rmw_long_latency_cache (
   //
   always_ff @(posedge clk)
     if (exe_wrbk_w) begin
-      exe_wrbk_bypass_r <= exe_wrbk_bypass_w;
-      exe_wrbk_word_r   <= exe_wrbk_word_w;
+      exe_wrbk_bypass_r  <= exe_wrbk_bypass_w;
+      exe_wrbk_word_r    <= exe_wrbk_word_w;
+      exe_wrbk_momento_r <= exe_wrbk_momento_w;
     end
   
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
     if (rst)
-      alloc_ptr_r <= '0;
+      alloc_ptr_r <= 'b1;
     else if (alloc_ptr_en)
       alloc_ptr_r <= alloc_ptr_w;
   
@@ -412,15 +379,15 @@ module rmw_long_latency_cache (
   //
   always_ff @(posedge clk)
     if (rst)
-      iss_ptr_r <= '0;
-    else if (iss_ptr_en)
-      iss_ptr_r <= iss_ptr_w;
+      issue_ptr_r <= 'b1;
+    else if (issue_ptr_en)
+      issue_ptr_r <= issue_ptr_w;
   
   // ------------------------------------------------------------------------ //
   //
   always_ff @(posedge clk)
     if (rst)
-      cmpl_ptr_r <= '0;
+      cmpl_ptr_r <= 'b1;
     else if (cmpl_ptr_en)
       cmpl_ptr_r <= cmpl_ptr_w;
   
@@ -428,17 +395,9 @@ module rmw_long_latency_cache (
   //
   always_ff @(posedge clk)
     if (rst)
-      retire_ptr_r <= '0;
+      retire_ptr_r <= 'b1;
     else if (retire_ptr_en)
       retire_ptr_r <= retire_ptr_w;
-  
-  // ------------------------------------------------------------------------ //
-  //
-  always_ff @(posedge clk)
-    if (rst)
-      full_r <= 'b0;
-    else
-      full_r <= full_w;
   
   // ------------------------------------------------------------------------ //
   //
@@ -499,32 +458,24 @@ module rmw_long_latency_cache (
       tbl_rd_itag_r <= tbl_rd_itag_w;
     end
   
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (rst)
+      cmpl_vld_r <= '0;
+    else
+      cmpl_vld_r <= cmpl_vld_w;
+  
+  // ------------------------------------------------------------------------ //
+  //
+  always_ff @(posedge clk)
+    if (cmpl_vld_w)
+      cmpl_word_r <= cmpl_word_w;
+  
   // ======================================================================== //
   //                                                                          //
   // Instantiations                                                           //
   //                                                                          //
   // ======================================================================== //
-  
-  // ------------------------------------------------------------------------ //
-  //
-  flm #(.N(IN_FLIGHT_N)) u_tbl_flm (
-    //
-      .clk               (clk                )
-    , .rst               (rst                )
-    //
-    , .alloc_vld         (tbl_flm__alloc_vld )
-    , .alloc_id          (tbl_flm__alloc_id  )
-    //
-    , .free_vld          (tbl_flm__free_vld  )
-    , .free_id           (tbl_flm__free_id   )
-    //
-    , .clear             (tbl_flm__clear     )
-    //
-    , .idle_r            (tbl_flm__idle_r    )
-    , .busy_r            (tbl_flm__busy_r    )
-    //
-    , .state_w           (tbl_flm__state_w   )
-    , .state_r           (tbl_flm__state_r   )
-  );
   
 endmodule
