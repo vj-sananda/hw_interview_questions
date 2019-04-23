@@ -96,7 +96,7 @@ irrelevant for day-to-day roles.
 ### General Problem Solving
 
 * latency
-* using_full_adders
+* using_full_adders : Updated with SV tb for Edaplayground
 * gates_from_MUX2X1 : Updated with SV tb for Edaplayground
 
 ### Queues
