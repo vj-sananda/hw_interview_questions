@@ -1,3 +1,6 @@
+# Updates
+Creating vanilla DV testbenches to simulate code in Edaplayground.
+
 # Hardware Interview Questions
 
 ## Introduction
@@ -94,7 +97,7 @@ irrelevant for day-to-day roles.
 
 * latency
 * using_full_adders
-* gates_from_MUX2X1
+* gates_from_MUX2X1 : Updated with SV tb for Edaplayground
 
 ### Queues
 
