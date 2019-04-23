@@ -22,22 +22,28 @@ module tb;
     init();
     clear_op();
     
-    for(int i=0; i<50;i++) begin
+    for(int i=0; i<10;i++) begin
       issue_op();
       rand_delay();
       retire_op();
+      rand_delay();
     end
     
     $finish;
     
   end
   
+  always @(issue_cnt_r) begin
+    $display("%t: issue_cnt     = %4d", $time,issue_cnt_r);
+    $display("%t: aggregate_cnt = %4d", $time,aggregate_cnt_r);
+  end
+             
   task tick(int n=1);
     repeat(n) @(posedge clk);
   endtask
   
   task rand_delay();
-    tick( $urandom_range(10,100));
+    tick( $urandom_range(10,20));
   endtask
   
   task clear_op();
