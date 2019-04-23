@@ -93,40 +93,37 @@ module latency #(parameter int W = 32)
     begin : cnt_PROC
 
       //
-      casez ({rst, clear, issue, retire})
-        4'b1_?_?_?,
-        4'b0_1_?_?: pending_cnt_w  = 'b0;
-        4'b0_0_1_0: pending_cnt_w  = pending_cnt_r + 'b1;
-        4'b0_0_0_1: pending_cnt_w  = pending_cnt_r - 'b1;
+      casez ({clear, issue, retire})
+        4'b1_?_?: pending_cnt_w  = 'b0;
+        4'b0_1_0: pending_cnt_w  = pending_cnt_r + 'b1;
+        4'b0_0_1: pending_cnt_w  = pending_cnt_r - 'b1;
         default:    pending_cnt_w  = pending_cnt_r;
-      endcase // casez ({rst, clear, issue, retire})
+      endcase // casez ({clear, issue, retire})
 
       //
-      pending_cnt_en  = (rst | clear | issue | retire);
+      pending_cnt_en  = ( clear | issue | retire);
 
       //
       in_flight       = (|pending_cnt_w);
 
       //
-      casez ({rst, clear, issue})
-        3'b1_?_?,
+      casez ({clear, issue})
         3'b0_1_?: issue_cnt_w  = 'b0;
         3'b0_0_1: issue_cnt_w  = issue_cnt_r + 'b1;
         default:  issue_cnt_w  = issue_cnt_r;
-      endcase // casez ({rst, clear, issue})
+      endcase // casez ({clear, issue})
 
       //
       issue_cnt_en  = (rst | clear | issue);
 
       //
-      casez ({rst, clear})
-        2'b1_?,
+      casez ({clear})
         2'b0_1:  aggregate_cnt_w  = 'b0;
         default: aggregate_cnt_w  = aggregate_cnt_r + pending_cnt_w;
       endcase // casez ({rst, clear})
 
       //
-      aggregate_cnt_en = (rst | clear | in_flight);
+      aggregate_cnt_en = ( clear | in_flight);
 
     end // block: cnt_PROC
 
@@ -134,23 +131,32 @@ module latency #(parameter int W = 32)
   //                                                                          //
   // Flops                                                                    //
   //                                                                          //
-  // ======================================================================== //
+  // ===================================================================== //
 
-  // ------------------------------------------------------------------------ //
+  // ---------------------------------------------------------------------- //
   //
-  always_ff @(posedge clk)
+  always_ff @(posedge clk or posedge rst)
+    if (rst)
+      issue_cnt_r <= 0;
+  else
     if (issue_cnt_en)
       issue_cnt_r <= issue_cnt_w;
 
   // ------------------------------------------------------------------------ //
   //
-  always_ff @(posedge clk)
+  always_ff @(posedge clk or posedge rst)
+    if (rst)
+      aggregate_cnt_r <= 0;
+  else
     if (aggregate_cnt_en)
       aggregate_cnt_r <= aggregate_cnt_w;
 
   // ------------------------------------------------------------------------ //
   //
-  always_ff @(posedge clk)
+  always_ff @(posedge clk or posedge rst)
+    if (rst)
+      pending_cnt_r <= 0;
+  else
     if (pending_cnt_en)
       pending_cnt_r <= pending_cnt_w;
 
