@@ -68,7 +68,7 @@ irrelevant for day-to-day roles.
 ### General Logic
 
 * one_or_two
-* multi_counter
+* multi_counter : Updated with SV tb for Edaplayground
 * multi_counter_variants
 * count_ones
 * detect_sequence
