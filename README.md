@@ -97,7 +97,7 @@ irrelevant for day-to-day roles.
 
 * using_full_adders 
 * latency: Updated with SV tb for Edaplayground
-* gates_from_MUX2X1 : Updated with SV tb for Edaplayground
+* <strong>gates_from_MUX2X1 : Updated with SV tb for Edaplayground</strong>
 
 ### Queues
 
